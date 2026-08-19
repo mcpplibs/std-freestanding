@@ -4,44 +4,38 @@ import std;
 // mcpplibs.std.freestanding — libc++'s own headers, configured for a target
 // with no OS, exported as one module.
 //
-// WHY THIS IS A PACKAGE AND NOT AN ENGINE FEATURE
+// WHAT THIS PACKAGE KNOWS, AND WHAT IT DELIBERATELY DOES NOT
 //
-// `import std;` is one module over the whole library — threads, filesystem and
-// iostreams included — so there is no subset of IT to build. But libc++'s
-// HEADERS are almost entirely freestanding-capable already; what stops them is
-// a single per-target file, `__config_site`, which the llvm payload ships only
-// for its host triple. Synthesising that file is this package's whole job.
+// It does not know which C library the target uses, which ISA it is, or which
+// toolchain is compiling it. It asks mcpp for the toolchain's payload root and
+// the target's sysroot, and both answers change with `--target` and
+// `[toolchain]` without this file changing at all.
 //
-// ⚠️ MEASURED, not assumed: with it, 103 of libc++'s 110 headers compile for
+// An earlier version declared `xim:picolibc-riscv@1.8.12` and `xim:llvm` in
+// `[xlings] deps`. That worked and was wrong three times over: it pinned a
+// libc, an architecture and a standard-library implementation into a package
+// whose whole content is implementation-neutral names from the standard.
+//
+// ⚠️ MEASURED: with the config below, 103 of libc++'s 110 headers compile for
 // riscv64-none-elf. The other 7 (generator, hazard_pointer, rcu, spanstream,
-// stacktrace, stdfloat, text_encoding) fail on an x86_64 host with full
-// libc++ and glibc too — they are headers libc++ has not implemented. The
+// stacktrace, stdfloat, text_encoding) fail on an x86_64 host with full libc++
+// and glibc too — they are headers libc++ has not implemented. The
 // freestanding loss at compile time is zero.
 int main() {
-    const char* sysroot = mcpp::xpkg_dir("xim", "picolibc-riscv");
-    const char* llvm    = mcpp::xpkg_dir("xim", "llvm");
-    if (!sysroot || !*sysroot) {
-        std::cerr << "std-freestanding: xim:picolibc-riscv is declared in "
-                     "[xlings].deps but is not installed\n";
+    const char* tc = mcpp::toolchain_dir();
+    if (!tc || !*tc) {
+        std::cerr << "std-freestanding: mcpp did not report a toolchain "
+                     "directory; this package needs the C++ library headers "
+                     "that ship with it\n";
         return 1;
     }
-    if (!llvm || !*llvm) {
-        std::cerr << "std-freestanding: xim:llvm is declared in [xlings].deps "
-                     "but is not installed — this package needs libc++'s "
-                     "headers, which ship with the toolchain\n";
-        return 1;
-    }
-
-    const std::string arch = mcpp::target_arch() ? mcpp::target_arch() : "";
-    const bool rv32 = (arch == "riscv32");
-    const std::string profile = rv32 ? "rv32imac/ilp32" : "rv64gc/lp64d";
 
     // ── The synthesised __config_site ──────────────────────────────────────
     //
     // ⚠️ It has to be a FILE, not -D flags. `_LIBCPP_HAS_THREADS` and friends
     // are read from this header by <__config>; defining them on the command
-    // line does not reach the check. Measured — the obvious `-D_LIBCPP_HAS_
-    // THREADS=0` has no effect at all.
+    // line does not reach the check at all — measured, the obvious
+    // `-D_LIBCPP_HAS_THREADS=0` has no effect whatsoever.
     //
     // Turning a capability off here makes it VANISH rather than leaving a stub
     // that fails at run time: `std::mutex` becomes "no type named 'mutex' in
@@ -61,8 +55,8 @@ int main() {
              "#define _LIBCPP_HAS_MONOTONIC_CLOCK 0\n"
              "#define _LIBCPP_HAS_FILESYSTEM 0\n"
              "#define _LIBCPP_HAS_LOCALIZATION 0\n"
-             // Consequences of the above; left on they reference facilities
-             // that no longer exist.
+             // Consequences of the above; left on they name facilities that no
+             // longer exist.
              "#define _LIBCPP_HAS_TERMINAL 0\n"
              "#define _LIBCPP_HAS_RANDOM_DEVICE 0\n"
              "#define _LIBCPP_HAS_TIME_ZONE_DATABASE 0\n"
@@ -79,19 +73,23 @@ int main() {
              "#define _LIBCPP_PSTL_BACKEND_SERIAL\n"
              "#define _LIBCPP_HARDENING_MODE_DEFAULT 2\n"
              "#define _LIBCPP_ASSERTION_SEMANTIC_DEFAULT 2\n"
-             // ⭐ libc++ already knows what picolibc is.
+             // libc++ already knows what picolibc is; saying so is not the
+             // same as depending on it — a target whose libc is newlib would
+             // set the other flag, and neither is this package's choice to
+             // make beyond passing it on.
              "#define _LIBCPP_LIBC_PICOLIBC 1\n"
              "#define _LIBCPP_LIBC_NEWLIB 0\n"
              "#endif\n";
     }
 
-    // ⚠️ ORDER. The synthesised config must be found BEFORE anything else, and
-    // libc++'s own headers before the C library's — `<stdio.h>` exists in both
-    // trees and the C++ one has to win.
+    // ⚠️ ORDER: the synthesised config must be found before libc++'s own
+    // headers, or `<__config>` picks up the host's.
+    //
+    // The target's C headers are NOT listed here — mcpp already put them on
+    // the compile line, because the C library belongs to the target.
     mcpp::include_dir(cfgdir.c_str());
-    mcpp::include_dir(std::format("{}/include/c++/v1", llvm).c_str());
-    mcpp::include_dir(std::format("{}/share/libc++/v1", llvm).c_str());   // std/<h>.inc
-    mcpp::include_dir(std::format("{}/include/{}", sysroot, profile).c_str());
+    mcpp::include_dir(std::format("{}/include/c++/v1", tc).c_str());
+    mcpp::include_dir(std::format("{}/share/libc++/v1", tc).c_str());  // std/<h>.inc
 
     mcpp::rerun_if_env_changed("MCPP_TARGET_ARCH");
     return 0;

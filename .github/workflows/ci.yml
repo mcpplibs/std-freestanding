@@ -37,7 +37,7 @@ jobs:
           # it, while mcpp starts the runner through its own.
           xlings install xim:qemu-riscv -y
           XLINGS_HOME="$HOME/.mcpp/registry" xlings install xim:qemu-riscv -y
-          XLINGS_HOME="$HOME/.mcpp/registry" xlings install xim:picolibc-riscv -y
+          # ⚠️ NOT picolibc: mcpp installs the target's C library itself.
 
       - name: The header list is MEASURED, and still holds
         run: |

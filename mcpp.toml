@@ -1,11 +1,18 @@
+# ⚠️ No [xlings] section, and that is the point.
+#
+# This package needs two things it does not own: the C++ library's headers
+# (which ship with whatever toolchain mcpp resolved) and the target's C library
+# (which mcpp resolves from the target's own row, exactly as it resolves the
+# compiler). It ASKS for both — `mcpp::toolchain_dir()` and
+# `mcpp::sysroot_dir()` — instead of declaring them.
+#
+# Declaring them is what bound an earlier version of this package to picolibc,
+# to RISC-V and to llvm, none of which it has any business knowing about.
 [package]
 namespace   = "mcpplibs"
 name        = "std-freestanding"
-version     = "0.1.0"
+version     = "0.2.0"
 description = "The freestanding subset of the C++ standard library as a module — import mcpplibs.std.freestanding"
 license     = "Apache-2.0"
 authors     = ["mcpplibs"]
 repo        = "https://github.com/mcpplibs/std-freestanding"
-
-[xlings]
-deps = ["xim:picolibc-riscv@1.8.12", "xim:llvm"]

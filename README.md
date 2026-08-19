@@ -11,8 +11,8 @@ std::ranges::sort(t, {}, &Task::prio);   // on bare metal
 
 ```toml
 [dependencies]
-std-freestanding = "0.1.0"
-riscv-virt-rt    = "0.2.0"   # the board: crt0, memory layout, emulator
+std-freestanding = "0.2.0"
+riscv-virt-rt    = "0.3.0"   # the board: crt0, memory layout, emulator
 ```
 
 ## Why this exists
@@ -74,13 +74,17 @@ with no macro to disable), so they cannot come from headers. Reaching for
 
 ## Requirements
 
-- **mcpp ≥ 2026.8.19.4.** Earlier versions do not put `-fno-exceptions` on a
-  freestanding target, and `std::optional::value()` alone then pulls in
+- **mcpp ≥ 2026.8.19.4**, for two things it introduced: `-fno-exceptions` on a
+  freestanding target (without it `std::optional::value()` alone pulls in
   `__cxa_throw`, `vtable for std::exception` and two more, none of which exist
-  without an unwinder.
-- `xim:picolibc-riscv` (the target C library) and `xim:llvm` (whose payload
-  carries libc++'s headers). Both are declared in `[xlings].deps` and located
-  through `mcpp::xpkg_dir`.
+  without an unwinder), and the target supplying its own C library.
+- **Nothing else.** ⚠️ This package declares no dependencies at all — no C
+  library, no architecture, no toolchain. It asks mcpp where the toolchain's
+  headers are (`mcpp::toolchain_dir()`), and the target's C headers are already
+  on the compile line because the C library belongs to the target. An earlier
+  version declared `xim:picolibc-riscv@1.8.12` and `xim:llvm`, which pinned a
+  package made entirely of standard-mandated names to one libc, one ISA and one
+  standard-library implementation.
 
 ## Regenerating
 
