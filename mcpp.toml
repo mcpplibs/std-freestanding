@@ -1,0 +1,11 @@
+[package]
+namespace   = "mcpplibs"
+name        = "std-freestanding"
+version     = "0.1.0"
+description = "The freestanding subset of the C++ standard library as a module — import mcpplibs.std.freestanding"
+license     = "Apache-2.0"
+authors     = ["mcpplibs"]
+repo        = "https://github.com/mcpplibs/std-freestanding"
+
+[xlings]
+deps = ["xim:picolibc-riscv@1.8.12", "xim:llvm"]

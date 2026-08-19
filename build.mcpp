@@ -1,0 +1,98 @@
+import mcpp;
+import std;
+
+// mcpplibs.std.freestanding — libc++'s own headers, configured for a target
+// with no OS, exported as one module.
+//
+// WHY THIS IS A PACKAGE AND NOT AN ENGINE FEATURE
+//
+// `import std;` is one module over the whole library — threads, filesystem and
+// iostreams included — so there is no subset of IT to build. But libc++'s
+// HEADERS are almost entirely freestanding-capable already; what stops them is
+// a single per-target file, `__config_site`, which the llvm payload ships only
+// for its host triple. Synthesising that file is this package's whole job.
+//
+// ⚠️ MEASURED, not assumed: with it, 103 of libc++'s 110 headers compile for
+// riscv64-none-elf. The other 7 (generator, hazard_pointer, rcu, spanstream,
+// stacktrace, stdfloat, text_encoding) fail on an x86_64 host with full
+// libc++ and glibc too — they are headers libc++ has not implemented. The
+// freestanding loss at compile time is zero.
+int main() {
+    const char* sysroot = mcpp::xpkg_dir("xim", "picolibc-riscv");
+    const char* llvm    = mcpp::xpkg_dir("xim", "llvm");
+    if (!sysroot || !*sysroot) {
+        std::cerr << "std-freestanding: xim:picolibc-riscv is declared in "
+                     "[xlings].deps but is not installed\n";
+        return 1;
+    }
+    if (!llvm || !*llvm) {
+        std::cerr << "std-freestanding: xim:llvm is declared in [xlings].deps "
+                     "but is not installed — this package needs libc++'s "
+                     "headers, which ship with the toolchain\n";
+        return 1;
+    }
+
+    const std::string arch = mcpp::target_arch() ? mcpp::target_arch() : "";
+    const bool rv32 = (arch == "riscv32");
+    const std::string profile = rv32 ? "rv32imac/ilp32" : "rv64gc/lp64d";
+
+    // ── The synthesised __config_site ──────────────────────────────────────
+    //
+    // ⚠️ It has to be a FILE, not -D flags. `_LIBCPP_HAS_THREADS` and friends
+    // are read from this header by <__config>; defining them on the command
+    // line does not reach the check. Measured — the obvious `-D_LIBCPP_HAS_
+    // THREADS=0` has no effect at all.
+    //
+    // Turning a capability off here makes it VANISH rather than leaving a stub
+    // that fails at run time: `std::mutex` becomes "no type named 'mutex' in
+    // namespace 'std'", which is the diagnostic a bare-metal author wants.
+    const std::string out = mcpp::out_dir() ? mcpp::out_dir() : ".";
+    const std::string cfgdir = out + "/libcxx-config/c++/v1";
+    std::filesystem::create_directories(cfgdir);
+    {
+        std::ofstream f(cfgdir + "/__config_site");
+        f << "#ifndef _LIBCPP___CONFIG_SITE\n#define _LIBCPP___CONFIG_SITE\n"
+             "#define _LIBCPP_ABI_VERSION 1\n"
+             "#define _LIBCPP_ABI_NAMESPACE __1\n"
+             "#define _LIBCPP_ABI_FORCE_ITANIUM 0\n"
+             "#define _LIBCPP_ABI_FORCE_MICROSOFT 0\n"
+             // The four that make it freestanding.
+             "#define _LIBCPP_HAS_THREADS 0\n"
+             "#define _LIBCPP_HAS_MONOTONIC_CLOCK 0\n"
+             "#define _LIBCPP_HAS_FILESYSTEM 0\n"
+             "#define _LIBCPP_HAS_LOCALIZATION 0\n"
+             // Consequences of the above; left on they reference facilities
+             // that no longer exist.
+             "#define _LIBCPP_HAS_TERMINAL 0\n"
+             "#define _LIBCPP_HAS_RANDOM_DEVICE 0\n"
+             "#define _LIBCPP_HAS_TIME_ZONE_DATABASE 0\n"
+             "#define _LIBCPP_HAS_WIDE_CHARACTERS 0\n"
+             "#define _LIBCPP_HAS_UNICODE 1\n"
+             "#define _LIBCPP_HAS_MUSL_LIBC 0\n"
+             "#define _LIBCPP_HAS_THREAD_API_PTHREAD 0\n"
+             "#define _LIBCPP_HAS_THREAD_API_EXTERNAL 0\n"
+             "#define _LIBCPP_HAS_THREAD_API_WIN32 0\n"
+             "#define _LIBCPP_HAS_THREAD_API_C11 0\n"
+             "#define _LIBCPP_HAS_VENDOR_AVAILABILITY_ANNOTATIONS 0\n"
+             "#define _LIBCPP_INSTRUMENTED_WITH_ASAN 0\n"
+             // Serial, because the std::thread backend does not exist here.
+             "#define _LIBCPP_PSTL_BACKEND_SERIAL\n"
+             "#define _LIBCPP_HARDENING_MODE_DEFAULT 2\n"
+             "#define _LIBCPP_ASSERTION_SEMANTIC_DEFAULT 2\n"
+             // ⭐ libc++ already knows what picolibc is.
+             "#define _LIBCPP_LIBC_PICOLIBC 1\n"
+             "#define _LIBCPP_LIBC_NEWLIB 0\n"
+             "#endif\n";
+    }
+
+    // ⚠️ ORDER. The synthesised config must be found BEFORE anything else, and
+    // libc++'s own headers before the C library's — `<stdio.h>` exists in both
+    // trees and the C++ one has to win.
+    mcpp::include_dir(cfgdir.c_str());
+    mcpp::include_dir(std::format("{}/include/c++/v1", llvm).c_str());
+    mcpp::include_dir(std::format("{}/share/libc++/v1", llvm).c_str());   // std/<h>.inc
+    mcpp::include_dir(std::format("{}/include/{}", sysroot, profile).c_str());
+
+    mcpp::rerun_if_env_changed("MCPP_TARGET_ARCH");
+    return 0;
+}

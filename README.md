@@ -1,0 +1,99 @@
+# std-freestanding
+
+The freestanding subset of the C++ standard library, as one module.
+
+```cpp
+import mcpplibs.std.freestanding;
+
+std::array<Task, 4> t{...};
+std::ranges::sort(t, {}, &Task::prio);   // on bare metal
+```
+
+```toml
+[dependencies]
+std-freestanding = "0.1.0"
+riscv-virt-rt    = "0.2.0"   # the board: crt0, memory layout, emulator
+```
+
+## Why this exists
+
+`import std;` is **one module over the whole library** — threads, filesystem
+and iostreams included — so there is no subset of *it* to build without an OS.
+mcpp turns it off on a freestanding target and says so.
+
+But libc++'s **headers** are almost entirely freestanding-capable already. What
+stops them is a single per-target file, `__config_site`, which the toolchain
+ships only for its own host triple. Synthesising that file is this package's
+whole job.
+
+## What you get
+
+⚠️ Measured, not asserted. `tools/regenerate.sh` compiles every one of libc++'s
+110 headers for the target and keeps the ones that work:
+
+| | |
+|---|---|
+| compiles for `riscv64-none-elf` | **103 / 110** |
+| the other 7 | `generator` `hazard_pointer` `rcu` `spanstream` `stacktrace` `stdfloat` `text_encoding` |
+
+⭐ **All 7 fail on an x86_64 host with full libc++ and glibc too** — they are
+headers libc++ has not implemented. **The freestanding loss at compile time is
+zero.** The regeneration script prints that control group every time it runs,
+because without it "libc++ has not written it" reads as "bare metal cannot do
+it".
+
+Verified running under the emulator: `array` · `span` · `optional` ·
+`expected` · `atomic` · `string_view` · `ranges::sort` with a projection ·
+`bit` · `charconv` · `concepts` · `type_traits` · `tuple` · coroutines.
+
+## What you do NOT get, and how you find out
+
+Capabilities turned off in `__config_site` **vanish** rather than leaving a stub
+that fails at run time:
+
+```
+error: no type named 'mutex' in namespace 'std'
+```
+
+That is the diagnostic a bare-metal author wants — at compile time, by name.
+`std::thread`, `std::mutex`, `<filesystem>` and locale-dependent formatting are
+gone for the same reason: there is no OS under them.
+
+## The boundary
+
+| Tier | Needs | Gets you |
+|---|---|---|
+| **header-only** (this package) | picolibc headers + the synthesised config | everything listed above |
+| **+ `libc.a`** (your board package) | picolibc | the heap, and the `memcpy`/`memmove` the compiler emits by itself |
+| **+ a target-built `libc++.a`** | ⚠️ not published | `std::format`, scalar `std::sort`, full `std::string` |
+
+The third row is a real boundary, not an oversight: libc++ keeps those bodies
+in its compiled library (`std::sort` for builtin scalars is an `extern template`
+with no macro to disable), so they cannot come from headers. Reaching for
+`std::format` today fails at **link** time, naming the symbol.
+
+## Requirements
+
+- **mcpp ≥ 2026.8.19.4.** Earlier versions do not put `-fno-exceptions` on a
+  freestanding target, and `std::optional::value()` alone then pulls in
+  `__cxa_throw`, `vtable for std::exception` and two more, none of which exist
+  without an unwinder.
+- `xim:picolibc-riscv` (the target C library) and `xim:llvm` (whose payload
+  carries libc++'s headers). Both are declared in `[xlings].deps` and located
+  through `mcpp::xpkg_dir`.
+
+## Regenerating
+
+```bash
+tools/regenerate.sh <llvm-payload-dir> <picolibc-dir> [rv64gc/lp64d]
+```
+
+⚠️ Run it when the toolchain moves, and **read the control group it prints**.
+The export table is never hand-written: libc++ ships one `std/<header>.inc` per
+header, each `export namespace std { using std::X; }`, and maintains them. This
+package only selects.
+
+## License
+
+Apache-2.0. It exports libc++'s names; libc++ is Apache-2.0 WITH
+LLVM-exception.

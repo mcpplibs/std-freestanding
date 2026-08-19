@@ -1,0 +1,76 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+  workflow_dispatch:
+
+jobs:
+  build:
+    name: subset compiles, runs in qemu, and omits what it must
+    runs-on: ubuntu-24.04
+    timeout-minutes: 40
+    env:
+      MCPP_VERSION: 2026.8.19.4
+      XLINGS_VERSION: v2026.8.17.2
+      XLINGS_NON_INTERACTIVE: '1'
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install xlings
+        run: |
+          curl -fsSL https://raw.githubusercontent.com/openxlings/xlings/main/tools/other/quick_install.sh \
+            | bash -s "$XLINGS_VERSION"
+          echo "$HOME/.xlings/subos/current/bin" >> "$GITHUB_PATH"
+
+      - name: Install mcpp
+        run: |
+          xlings update
+          xlings install "mcpp@$MCPP_VERSION" -y -g
+          mcpp --version
+          mcpp self config --mirror GLOBAL
+
+      - name: Install the target world
+        run: |
+          # Both homes: the shim on PATH dispatches against whichever home owns
+          # it, while mcpp starts the runner through its own.
+          xlings install xim:qemu-riscv -y
+          XLINGS_HOME="$HOME/.mcpp/registry" xlings install xim:qemu-riscv -y
+          XLINGS_HOME="$HOME/.mcpp/registry" xlings install xim:picolibc-riscv -y
+
+      - name: The header list is MEASURED, and still holds
+        run: |
+          LLVM=""
+          for d in "$HOME"/.mcpp/registry/data/xpkgs/xim-x-llvm/*/; do
+            [ -x "$d/bin/clang++" ] && LLVM="${d%/}"
+          done
+          PICO="$(ls -d "$HOME"/.mcpp/registry/data/xpkgs/xim-x-picolibc-riscv/*/ | tail -1)"
+          tools/regenerate.sh "$LLVM" "${PICO%/}" | tee regen.log
+          # ⚠️ Two-sided. A drop in the count means the toolchain moved; a
+          # "HOST OK" line means a header regressed on the TARGET only, which
+          # is the case worth failing for.
+          grep -q 'compiles for rv64gc/lp64d: 103 / 110' regen.log
+          ! grep -q 'HOST OK' regen.log
+          # Regenerating must be a no-op on a committed tree.
+          git diff --exit-code src/std_freestanding.cppm
+
+      - name: It runs on the target
+        working-directory: examples/probe
+        run: |
+          mcpp run 2>&1 | tee run.log
+          grep -q 'abcd'       run.log     # ranges::sort with a projection
+          grep -q 'atomic 42'  run.log     # optional + atomic
+          grep -q 'span+string_view / 4' run.log
+
+      - name: And it omits what it must
+        working-directory: examples/probe
+        run: |
+          cat > src/main.cpp <<'EOF'
+          import mcpplibs.std.freestanding;
+          extern "C" int main() { std::mutex m; (void)m; return 0; }
+          EOF
+          if mcpp build > mutex.log 2>&1; then
+            cat mutex.log; echo "std::mutex compiled on a target with no threads"; exit 1
+          fi
+          grep -qi mutex mutex.log

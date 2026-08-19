@@ -1,0 +1,13 @@
+# ⚠️ The example needs a BOARD as well as this package, and that is the point:
+# a standard-library subset supplies no crt0, no memory layout and no emulator.
+# Those are the board's, and the two compose.
+[package]
+name    = "probe"
+version = "0.1.0"
+
+[build]
+target = "riscv64-none-elf"
+
+[dependencies]
+riscv-virt-rt   = "0.2.0"
+std-freestanding = { path = "../.." }
