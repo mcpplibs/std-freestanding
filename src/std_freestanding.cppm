@@ -96,8 +96,8 @@ module;
 #include <future>
 #include <initializer_list>
 #include <iomanip>
-#include <iosfwd>
 #include <ios>
+#include <iosfwd>
 #include <iostream>
 #include <istream>
 #if !defined(__cpp_lib_freestanding_iterator) || __cpp_lib_freestanding_iterator >= 202306L
@@ -163,9 +163,9 @@ module;
 #if !defined(__cpp_lib_freestanding_tuple) || __cpp_lib_freestanding_tuple >= 202306L
 #include <tuple>
 #endif
+#include <type_traits>
 #include <typeindex>
 #include <typeinfo>
-#include <type_traits>
 #include <unordered_map>
 #include <unordered_set>
 #if !defined(__cpp_lib_freestanding_utility) || __cpp_lib_freestanding_utility >= 202306L
@@ -260,8 +260,8 @@ export module mcpplibs.std.freestanding;
 #include "std/future.inc"
 #include "std/initializer_list.inc"
 #include "std/iomanip.inc"
-#include "std/iosfwd.inc"
 #include "std/ios.inc"
+#include "std/iosfwd.inc"
 #include "std/iostream.inc"
 #include "std/istream.inc"
 #if !defined(__cpp_lib_freestanding_iterator) || __cpp_lib_freestanding_iterator >= 202306L
@@ -327,9 +327,9 @@ export module mcpplibs.std.freestanding;
 #if !defined(__cpp_lib_freestanding_tuple) || __cpp_lib_freestanding_tuple >= 202306L
 #include "std/tuple.inc"
 #endif
+#include "std/type_traits.inc"
 #include "std/typeindex.inc"
 #include "std/typeinfo.inc"
-#include "std/type_traits.inc"
 #include "std/unordered_map.inc"
 #include "std/unordered_set.inc"
 #if !defined(__cpp_lib_freestanding_utility) || __cpp_lib_freestanding_utility >= 202306L

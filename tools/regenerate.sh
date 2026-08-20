@@ -9,6 +9,26 @@
 #
 #   tools/regenerate.sh <llvm-payload-dir> <picolibc-dir> [profile]
 set -euo pipefail
+
+# ⚠️ THE COLLATION IS PINNED, AND NOT PINNING IT MADE REGENERATION MACHINE-
+# DEPENDENT.
+#
+# The header order in the generated file comes from a shell glob, and glob
+# expansion sorts with the current locale. Measured on this payload:
+#
+#   default (en_US.UTF-8)   typeindex.inc  typeinfo.inc  type_traits.inc
+#   LC_ALL=C                type_traits.inc  typeindex.inc  typeinfo.inc
+#
+# The underscore is 0x5F, which precedes `i` in byte order; a UTF-8 collation
+# weights punctuation differently and puts `type_traits` last.
+#
+# The CI check is that regeneration is a NO-OP. Running it on a UTF-8 desktop
+# and checking it on a runner whose locale is POSIX therefore produced a diff
+# with no change of content — three lines moved — and reported the generated
+# file as stale. Pinning makes the output a function of the inputs alone, which
+# is what a no-op check requires.
+export LC_ALL=C
+
 LLVM="${1:?usage: regenerate.sh <llvm-dir> <picolibc-dir> [profile]}"
 PICO="${2:?usage: regenerate.sh <llvm-dir> <picolibc-dir> [profile]}"
 PROFILE="${3:-rv64gc/lp64d}"
