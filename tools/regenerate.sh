@@ -62,12 +62,77 @@ done < "$WORK/bad"
 # the check that regeneration is a no-op is what keeps them together.
 NOLIBC_EXCLUDE="cinttypes cmath complex cstdlib exception format print random valarray"
 
+# ── The headers C++26 made freestanding, and the macro that announces each ──
+#
+# ⚠️ THE RULE IS "A MACRO PRESENT AND TOO OLD EXCLUDES; A MACRO ABSENT DOES
+# NOT", AND THE ASYMMETRY IS THE WHOLE POINT.
+#
+# C++26 gives an implementation a way to say which headers it has made
+# freestanding. Using that as a gate would be wrong today in the loudest
+# possible way: measured 2026-08-20, libc++ 22.1.8 defines NONE of these macros
+# and libstdc++ 16.1.0 defines seven — so a gate would report that libc++
+# provides no freestanding headers at all, and empty this package on the
+# implementation it is built for.
+#
+# Neither implementation defines `__cpp_lib_freestanding_feature_test_macros`
+# either, so there is not even a reliable way to ask "do you implement this
+# mechanism". Absence is therefore ambiguous: it means "not freestanding" or "no
+# opinion yet", and the two are indistinguishable.
+#
+# So absence falls back to what this script MEASURED by compiling. A macro that
+# is present and below the required value is the only unambiguous statement
+# available — the implementation has considered the header and says no — and it
+# is the only case that excludes.
+#
+# The value beside each name is the one the standard assigns to that macro.
+FS_MACROS="
+algorithm:202311
+array:202311
+charconv:202306
+cstdlib:202306
+cstring:202311
+cwchar:202306
+execution:202502
+expected:202311
+functional:202306
+iterator:202306
+mdspan:202311
+memory:202306
+numeric:202311
+optional:202311
+random:202502
+ranges:202306
+ratio:202306
+string_view:202311
+tuple:202306
+utility:202306
+variant:202311
+"
+
+fs_macro_value() {   # $1 = header name; echoes the required value, or nothing
+    printf '%s' "$FS_MACROS" | while IFS=: read -r n v; do
+        if [ "$n" = "$1" ]; then printf '%s' "$v"; fi
+    done
+}
+
 guarded() {   # $1 = template with %s for the header name
     while read -r h; do
-        case " $NOLIBC_EXCLUDE " in
-            *" $h "*) printf '#ifndef MCPP_FEATURE_NOLIBC\n'; printf "$1\n" "$h"; printf '#endif\n' ;;
-            *)        printf "$1\n" "$h" ;;
-        esac
+        nolibc=no
+        case " $NOLIBC_EXCLUDE " in *" $h "*) nolibc=yes ;; esac
+        want="$(fs_macro_value "$h")"
+
+        # ⚠️ `if` rather than `[ ... ] && ...`. Under `set -e` a trailing
+        # `&&` whose test is false makes the FUNCTION return non-zero, and the
+        # script stops there — which truncated the generated module to zero
+        # includes while every individual piece was correct.
+        if [ "$nolibc" = yes ]; then printf '#ifndef MCPP_FEATURE_NOLIBC\n'; fi
+        if [ -n "$want" ]; then
+            m="__cpp_lib_freestanding_$h"
+            printf '#if !defined(%s) || %s >= %sL\n' "$m" "$m" "$want"
+        fi
+        printf "$1\n" "$h"
+        if [ -n "$want" ];        then printf '#endif\n'; fi
+        if [ "$nolibc" = yes ]; then printf '#endif\n'; fi
     done < "$WORK/ok"
 }
 

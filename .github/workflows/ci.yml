@@ -126,6 +126,46 @@ jobs:
       # broke `<charconv>` would lower the headline number by one and quietly
       # remove a mandated header. The list is data in `tools/` so that the
       # requirement is reviewable rather than encoded in a script.
+      # ⚠️ THE C++26 GUARD, ASSERTED ON BOTH SIDES — otherwise it is 42 lines
+      # that do nothing and nobody would notice.
+      #
+      # The rule the generator emits is deliberately asymmetric: a feature-test
+      # macro that is PRESENT and below the standard's value excludes the
+      # header; a macro that is ABSENT does not. Measured 2026-08-20, libc++
+      # 22.1.8 defines none of these macros and libstdc++ 16.1.0 defines seven,
+      # and neither defines `__cpp_lib_freestanding_feature_test_macros` — so
+      # absence cannot be read as "not freestanding", and gating on presence
+      # would empty this package on the implementation it is built for.
+      - name: The C++26 freestanding guard excludes only when told to
+        run: |
+          set -euo pipefail
+          CL="$(find "$HOME/.mcpp/registry/data/xpkgs/xim-x-llvm" -name 'clang++' | head -1)"
+          cat > /tmp/guard.cpp <<'EOF'
+          #if !defined(__cpp_lib_freestanding_optional) || __cpp_lib_freestanding_optional >= 202311L
+          #define INCLUDED 1
+          #else
+          #define INCLUDED 0
+          #endif
+          static_assert(INCLUDED == EXPECT, "guard did not behave as documented");
+          int main(){}
+          EOF
+          check() {   # $1 = macro definition or empty, $2 = expected INCLUDED
+            "$CL" --no-default-config -std=c++23 -fsyntax-only $1 -DEXPECT=$2 /tmp/guard.cpp \
+              || { echo "guard wrong for [$1], expected INCLUDED=$2"; exit 1; }
+          }
+          check ""                                          1   # no opinion -> keep
+          check "-D__cpp_lib_freestanding_optional=202311L"  1   # says yes    -> keep
+          check "-D__cpp_lib_freestanding_optional=202502L"  1   # says newer  -> keep
+          check "-D__cpp_lib_freestanding_optional=202300L"  0   # says no     -> drop
+          echo "the guard keeps on absence and on assent, and drops only on refusal"
+
+          # And the guard is actually IN the module, for every header the
+          # standard gives a macro. A generator that stopped emitting them would
+          # pass every check above.
+          n="$(grep -c '__cpp_lib_freestanding_' src/std_freestanding.cppm)"
+          [ "$n" -ge 40 ] || { echo "expected the module to carry the guards; found $n lines"; exit 1; }
+          echo "the module carries $n guard lines"
+
       - name: Every header the standard mandates is provided
         run: |
           set -euo pipefail

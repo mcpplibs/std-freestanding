@@ -16,9 +16,13 @@
 // one `std/<header>.inc` per header — each `export namespace std { using
 // std::X; }` — and maintains them. This file only SELECTS.
 module;
+#if !defined(__cpp_lib_freestanding_algorithm) || __cpp_lib_freestanding_algorithm >= 202311L
 #include <algorithm>
+#endif
 #include <any>
+#if !defined(__cpp_lib_freestanding_array) || __cpp_lib_freestanding_array >= 202311L
 #include <array>
+#endif
 #include <atomic>
 #include <barrier>
 #include <bit>
@@ -28,7 +32,9 @@ module;
 #include <cerrno>
 #include <cfenv>
 #include <cfloat>
+#if !defined(__cpp_lib_freestanding_charconv) || __cpp_lib_freestanding_charconv >= 202306L
 #include <charconv>
+#endif
 #include <chrono>
 #ifndef MCPP_FEATURE_NOLIBC
 #include <cinttypes>
@@ -53,19 +59,29 @@ module;
 #include <cstdint>
 #include <cstdio>
 #ifndef MCPP_FEATURE_NOLIBC
+#if !defined(__cpp_lib_freestanding_cstdlib) || __cpp_lib_freestanding_cstdlib >= 202306L
 #include <cstdlib>
 #endif
+#endif
+#if !defined(__cpp_lib_freestanding_cstring) || __cpp_lib_freestanding_cstring >= 202311L
 #include <cstring>
+#endif
 #include <ctime>
 #include <cuchar>
+#if !defined(__cpp_lib_freestanding_cwchar) || __cpp_lib_freestanding_cwchar >= 202306L
 #include <cwchar>
+#endif
 #include <cwctype>
 #include <deque>
 #ifndef MCPP_FEATURE_NOLIBC
 #include <exception>
 #endif
+#if !defined(__cpp_lib_freestanding_execution) || __cpp_lib_freestanding_execution >= 202502L
 #include <execution>
+#endif
+#if !defined(__cpp_lib_freestanding_expected) || __cpp_lib_freestanding_expected >= 202311L
 #include <expected>
+#endif
 #include <filesystem>
 #include <flat_map>
 #include <flat_set>
@@ -74,7 +90,9 @@ module;
 #endif
 #include <forward_list>
 #include <fstream>
+#if !defined(__cpp_lib_freestanding_functional) || __cpp_lib_freestanding_functional >= 202306L
 #include <functional>
+#endif
 #include <future>
 #include <initializer_list>
 #include <iomanip>
@@ -82,30 +100,46 @@ module;
 #include <ios>
 #include <iostream>
 #include <istream>
+#if !defined(__cpp_lib_freestanding_iterator) || __cpp_lib_freestanding_iterator >= 202306L
 #include <iterator>
+#endif
 #include <latch>
 #include <limits>
 #include <list>
 #include <locale>
 #include <map>
+#if !defined(__cpp_lib_freestanding_mdspan) || __cpp_lib_freestanding_mdspan >= 202311L
 #include <mdspan>
+#endif
+#if !defined(__cpp_lib_freestanding_memory) || __cpp_lib_freestanding_memory >= 202306L
 #include <memory>
+#endif
 #include <memory_resource>
 #include <mutex>
 #include <new>
 #include <numbers>
+#if !defined(__cpp_lib_freestanding_numeric) || __cpp_lib_freestanding_numeric >= 202311L
 #include <numeric>
+#endif
+#if !defined(__cpp_lib_freestanding_optional) || __cpp_lib_freestanding_optional >= 202311L
 #include <optional>
+#endif
 #include <ostream>
 #ifndef MCPP_FEATURE_NOLIBC
 #include <print>
 #endif
 #include <queue>
 #ifndef MCPP_FEATURE_NOLIBC
+#if !defined(__cpp_lib_freestanding_random) || __cpp_lib_freestanding_random >= 202502L
 #include <random>
 #endif
+#endif
+#if !defined(__cpp_lib_freestanding_ranges) || __cpp_lib_freestanding_ranges >= 202306L
 #include <ranges>
+#endif
+#if !defined(__cpp_lib_freestanding_ratio) || __cpp_lib_freestanding_ratio >= 202306L
 #include <ratio>
+#endif
 #include <regex>
 #include <scoped_allocator>
 #include <semaphore>
@@ -119,28 +153,40 @@ module;
 #include <stop_token>
 #include <streambuf>
 #include <string>
+#if !defined(__cpp_lib_freestanding_string_view) || __cpp_lib_freestanding_string_view >= 202311L
 #include <string_view>
+#endif
 #include <strstream>
 #include <syncstream>
 #include <system_error>
 #include <thread>
+#if !defined(__cpp_lib_freestanding_tuple) || __cpp_lib_freestanding_tuple >= 202306L
 #include <tuple>
+#endif
 #include <typeindex>
 #include <typeinfo>
 #include <type_traits>
 #include <unordered_map>
 #include <unordered_set>
+#if !defined(__cpp_lib_freestanding_utility) || __cpp_lib_freestanding_utility >= 202306L
 #include <utility>
+#endif
 #ifndef MCPP_FEATURE_NOLIBC
 #include <valarray>
 #endif
+#if !defined(__cpp_lib_freestanding_variant) || __cpp_lib_freestanding_variant >= 202311L
 #include <variant>
+#endif
 #include <vector>
 #include <version>
 export module mcpplibs.std.freestanding;
+#if !defined(__cpp_lib_freestanding_algorithm) || __cpp_lib_freestanding_algorithm >= 202311L
 #include "std/algorithm.inc"
+#endif
 #include "std/any.inc"
+#if !defined(__cpp_lib_freestanding_array) || __cpp_lib_freestanding_array >= 202311L
 #include "std/array.inc"
+#endif
 #include "std/atomic.inc"
 #include "std/barrier.inc"
 #include "std/bit.inc"
@@ -150,7 +196,9 @@ export module mcpplibs.std.freestanding;
 #include "std/cerrno.inc"
 #include "std/cfenv.inc"
 #include "std/cfloat.inc"
+#if !defined(__cpp_lib_freestanding_charconv) || __cpp_lib_freestanding_charconv >= 202306L
 #include "std/charconv.inc"
+#endif
 #include "std/chrono.inc"
 #ifndef MCPP_FEATURE_NOLIBC
 #include "std/cinttypes.inc"
@@ -175,19 +223,29 @@ export module mcpplibs.std.freestanding;
 #include "std/cstdint.inc"
 #include "std/cstdio.inc"
 #ifndef MCPP_FEATURE_NOLIBC
+#if !defined(__cpp_lib_freestanding_cstdlib) || __cpp_lib_freestanding_cstdlib >= 202306L
 #include "std/cstdlib.inc"
 #endif
+#endif
+#if !defined(__cpp_lib_freestanding_cstring) || __cpp_lib_freestanding_cstring >= 202311L
 #include "std/cstring.inc"
+#endif
 #include "std/ctime.inc"
 #include "std/cuchar.inc"
+#if !defined(__cpp_lib_freestanding_cwchar) || __cpp_lib_freestanding_cwchar >= 202306L
 #include "std/cwchar.inc"
+#endif
 #include "std/cwctype.inc"
 #include "std/deque.inc"
 #ifndef MCPP_FEATURE_NOLIBC
 #include "std/exception.inc"
 #endif
+#if !defined(__cpp_lib_freestanding_execution) || __cpp_lib_freestanding_execution >= 202502L
 #include "std/execution.inc"
+#endif
+#if !defined(__cpp_lib_freestanding_expected) || __cpp_lib_freestanding_expected >= 202311L
 #include "std/expected.inc"
+#endif
 #include "std/filesystem.inc"
 #include "std/flat_map.inc"
 #include "std/flat_set.inc"
@@ -196,7 +254,9 @@ export module mcpplibs.std.freestanding;
 #endif
 #include "std/forward_list.inc"
 #include "std/fstream.inc"
+#if !defined(__cpp_lib_freestanding_functional) || __cpp_lib_freestanding_functional >= 202306L
 #include "std/functional.inc"
+#endif
 #include "std/future.inc"
 #include "std/initializer_list.inc"
 #include "std/iomanip.inc"
@@ -204,30 +264,46 @@ export module mcpplibs.std.freestanding;
 #include "std/ios.inc"
 #include "std/iostream.inc"
 #include "std/istream.inc"
+#if !defined(__cpp_lib_freestanding_iterator) || __cpp_lib_freestanding_iterator >= 202306L
 #include "std/iterator.inc"
+#endif
 #include "std/latch.inc"
 #include "std/limits.inc"
 #include "std/list.inc"
 #include "std/locale.inc"
 #include "std/map.inc"
+#if !defined(__cpp_lib_freestanding_mdspan) || __cpp_lib_freestanding_mdspan >= 202311L
 #include "std/mdspan.inc"
+#endif
+#if !defined(__cpp_lib_freestanding_memory) || __cpp_lib_freestanding_memory >= 202306L
 #include "std/memory.inc"
+#endif
 #include "std/memory_resource.inc"
 #include "std/mutex.inc"
 #include "std/new.inc"
 #include "std/numbers.inc"
+#if !defined(__cpp_lib_freestanding_numeric) || __cpp_lib_freestanding_numeric >= 202311L
 #include "std/numeric.inc"
+#endif
+#if !defined(__cpp_lib_freestanding_optional) || __cpp_lib_freestanding_optional >= 202311L
 #include "std/optional.inc"
+#endif
 #include "std/ostream.inc"
 #ifndef MCPP_FEATURE_NOLIBC
 #include "std/print.inc"
 #endif
 #include "std/queue.inc"
 #ifndef MCPP_FEATURE_NOLIBC
+#if !defined(__cpp_lib_freestanding_random) || __cpp_lib_freestanding_random >= 202502L
 #include "std/random.inc"
 #endif
+#endif
+#if !defined(__cpp_lib_freestanding_ranges) || __cpp_lib_freestanding_ranges >= 202306L
 #include "std/ranges.inc"
+#endif
+#if !defined(__cpp_lib_freestanding_ratio) || __cpp_lib_freestanding_ratio >= 202306L
 #include "std/ratio.inc"
+#endif
 #include "std/regex.inc"
 #include "std/scoped_allocator.inc"
 #include "std/semaphore.inc"
@@ -241,21 +317,29 @@ export module mcpplibs.std.freestanding;
 #include "std/stop_token.inc"
 #include "std/streambuf.inc"
 #include "std/string.inc"
+#if !defined(__cpp_lib_freestanding_string_view) || __cpp_lib_freestanding_string_view >= 202311L
 #include "std/string_view.inc"
+#endif
 #include "std/strstream.inc"
 #include "std/syncstream.inc"
 #include "std/system_error.inc"
 #include "std/thread.inc"
+#if !defined(__cpp_lib_freestanding_tuple) || __cpp_lib_freestanding_tuple >= 202306L
 #include "std/tuple.inc"
+#endif
 #include "std/typeindex.inc"
 #include "std/typeinfo.inc"
 #include "std/type_traits.inc"
 #include "std/unordered_map.inc"
 #include "std/unordered_set.inc"
+#if !defined(__cpp_lib_freestanding_utility) || __cpp_lib_freestanding_utility >= 202306L
 #include "std/utility.inc"
+#endif
 #ifndef MCPP_FEATURE_NOLIBC
 #include "std/valarray.inc"
 #endif
+#if !defined(__cpp_lib_freestanding_variant) || __cpp_lib_freestanding_variant >= 202311L
 #include "std/variant.inc"
+#endif
 #include "std/vector.inc"
 #include "std/version.inc"
