@@ -312,6 +312,18 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
+      # ⚠️ The target C library, in every job that builds for the target.
+      # The index descriptor's `deps` edge hands it to a CONSUMER when the
+      # PACKAGE is installed; a repository building its own tree installs
+      # nothing, so that edge never fires and the build dies on
+      # `'stdio.h' file not found` or `'inttypes.h' file not found` — the second
+      # from the toolchain's own C-header wrapper, which has nothing to
+      # `#include_next` to.
+      - name: Install the target C library
+        run: |
+          xlings install xim:picolibc-riscv -y
+          XLINGS_HOME="$HOME/.mcpp/registry" xlings install xim:picolibc-riscv -y
+
       - name: Install xlings (Unix)
         if: runner.os != 'Windows'
         run: |
@@ -457,6 +469,18 @@ jobs:
       XLINGS_NON_INTERACTIVE: '1'
     steps:
       - uses: actions/checkout@v4
+
+      # ⚠️ The target C library, in every job that builds for the target.
+      # The index descriptor's `deps` edge hands it to a CONSUMER when the
+      # PACKAGE is installed; a repository building its own tree installs
+      # nothing, so that edge never fires and the build dies on
+      # `'stdio.h' file not found` or `'inttypes.h' file not found` — the second
+      # from the toolchain's own C-header wrapper, which has nothing to
+      # `#include_next` to.
+      - name: Install the target C library
+        run: |
+          xlings install xim:picolibc-riscv -y
+          XLINGS_HOME="$HOME/.mcpp/registry" xlings install xim:picolibc-riscv -y
 
       - name: Install xlings
         run: |
