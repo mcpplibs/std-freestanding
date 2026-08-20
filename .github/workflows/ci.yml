@@ -445,29 +445,83 @@ jobs:
           xlings install xim:picolibc-riscv -y
           XLINGS_HOME="$HOME/.mcpp/registry" xlings install xim:picolibc-riscv -y
 
+      # ⚠️ THE HEADERS, ON THE HOST WHOSE PAYLOAD HAS NONE.
+      #
+      # A consumer gets this edge from the index descriptor when it INSTALLS the
+      # package; a repository building its own tree installs nothing, so the
+      # edge never fires and the build would report the packaging gap. Same
+      # shape as the target C library above.
+      - name: Install the libc++ headers (Windows only)
+        if: runner.os == 'Windows'
+        run: |
+          xlings install xim:libcxx-headers -y
+          XLINGS_HOME="$HOME/.mcpp/registry" xlings install xim:libcxx-headers -y
+
       - name: The subset cross-builds
         run: |
-          if [ "$RUNNER_OS" = "Windows" ]; then
-            echo "── what this payload actually carries ──"
-            for d in "$HOME"/.mcpp/registry/data/xpkgs/xim-x-llvm/*/; do
-              echo "payload: $d"
-              ls "$d/include" 2>/dev/null | head -20 || echo "  (no include/)"
-              echo "  include/c++ :"; ls -d "$d"/include/c++/v1 2>/dev/null || echo "    absent"
-              echo "  share/libc++:"; ls -d "$d"/share/libc++/v1 2>/dev/null || echo "    absent"
-            done
-            if mcpp build --target riscv64-none-elf > out.log 2>&1; then
-              echo "::error::the subset now builds from Windows — the payload has gained libc++, and the notes in README.md and build.mcpp are out of date"
-              exit 1
-            fi
-            grep -q "carries no" out.log || {
-              cat out.log
-              echo "the failure was not the documented packaging gap; something else is wrong"
-              exit 1; }
-            echo "measured: this payload has no libc++ headers, which is the documented gap"
-            exit 0
-          fi
+          echo "── what this payload actually carries ──"
+          for d in "$HOME"/.mcpp/registry/data/xpkgs/xim-x-llvm/*/; do
+            echo "payload: $d"
+            echo "  include/c++ :"; ls -d "$d"/include/c++/v1 2>/dev/null || echo "    absent"
+            echo "  share/libc++:"; ls -d "$d"/share/libc++/v1 2>/dev/null || echo "    absent"
+          done
           mcpp build --target riscv64-none-elf || true
           mcpp build --target riscv64-none-elf
+
+      # ⭐ WHERE THE HEADERS CAME FROM, ASSERTED SEPARATELY ON EACH HOST.
+      #
+      # The build succeeding says nothing about which of the two sources
+      # answered, and the two have opposite requirements: on a host whose
+      # payload carries libc++ the package must NOT be consulted, because a
+      # compile line that changed there would change every consumer's cache key
+      # on a host where nothing was wrong.
+      #
+      # ⚠️ The Windows row proves the fallback fires; the others prove it does
+      # not. A single assertion could not do both, which is why this step reads
+      # the compile line rather than the exit code.
+      - name: The headers came from the right place
+        run: |
+          set -euo pipefail
+          CDB=$(find . -name compile_commands.json | head -1)
+          test -n "$CDB"
+          if [ "$RUNNER_OS" = "Windows" ]; then
+            grep -q "libcxx-headers" "$CDB" || {
+              echo "the build succeeded without the package this host has no other source for"
+              exit 1; }
+            echo "measured: the headers came from xim:libcxx-headers, as they must on this host"
+          else
+            if grep -q "libcxx-headers" "$CDB"; then
+              echo "::error::this host's payload carries libc++, and the build reached for the package anyway — the fallback is firing where it must not, and every consumer's cache key on this host has moved"
+              exit 1
+            fi
+            echo "measured: the payload answered and the package was not consulted"
+          fi
+
+      # ⚠️ INFORMATIONAL, AND ALLOWED TO FAIL. This measures a question the
+      # planning documents have carried as UNKNOWN rather than as answered:
+      # whether the MSVC standard library can serve a bare-metal target.
+      #
+      # It is not a check. Nothing in this package depends on the answer — the
+      # step exists because a reason written from memory is worth less than one
+      # error message from the machine that can produce it, and this repository
+      # has already spent a correction on exactly that.
+      #
+      # ⭐ The reason it was open: an earlier objection — that a bare triple
+      # cannot be combined with the MSVC ABI — was measured and found false;
+      # clang accepts `riscv64-pc-windows-msvc`. Disproving an objection does
+      # not establish a conclusion, so the column went back to unknown.
+      - name: Measure what MSVC STL says about a bare-metal target (informational)
+        if: runner.os == 'Windows'
+        continue-on-error: true
+        shell: pwsh
+        run: |
+          $cl = Get-ChildItem -Path "$env:USERPROFILE\.mcpp\registry\data\xpkgs\xim-x-llvm" -Recurse -Filter clang++.exe -ErrorAction SilentlyContinue | Select-Object -First 1
+          if (-not $cl) { Write-Host "no clang in the payload; nothing to measure"; exit 0 }
+          "#include <array>" | Out-File -Encoding ascii t.cpp
+          Write-Host "── MSVC STL, for a bare-metal target ──"
+          & $cl.FullName --target=riscv64-none-elf -ffreestanding -std=c++23 -fsyntax-only t.cpp 2>&1 | Select-Object -First 12
+          Write-Host "── MSVC STL, for its own target, as a control ──"
+          & $cl.FullName --target=x86_64-pc-windows-msvc -std=c++23 -fsyntax-only t.cpp 2>&1 | Select-Object -First 6
 
   # ---------------------------------------------------------------------------
   # The features, each with the outcome it is supposed to produce.

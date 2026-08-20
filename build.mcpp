@@ -121,39 +121,71 @@ int main() {
     // clang against the MSVC standard library for Windows-hosted work and omits
     // libc++ entirely, which also removes it from every cross-compilation that
     // payload could otherwise serve.
+    // ── Where the headers come from ────────────────────────────────────────
+    //
+    // ⭐ TWO SOURCES, TRIED IN THIS ORDER, AND THE ORDER IS WHAT MAKES THE
+    // CHANGE INVISIBLE WHERE NOTHING WAS BROKEN.
+    //
+    //   1. the toolchain payload, if it carries them   ← Linux and macOS, today
+    //   2. otherwise the `libcxx-headers` package
+    //
+    // The second is only consulted when the first is absent, so on every host
+    // whose payload already ships libc++ the resolution is byte-for-byte what
+    // it was. That is not politeness: this package's output is a compile line,
+    // and a compile line that changed would change every consumer's build cache
+    // key on hosts where nothing was wrong.
+    //
+    // ⚠️ THE SECOND SOURCE IS A PACKAGE RATHER THAN A PATCHED PAYLOAD, AND THAT
+    // IS THE PART WORTH ARGUING. The alternative — add libc++ to the Windows
+    // LLVM payload — has to be done once per host that lacks it, in a repository
+    // this project does not own, and it makes the fix invisible to the manifest.
+    // A package is one artifact for all five hosts (the headers are
+    // host-independent text; measured, 943,180 bytes packed) and its version is
+    // carried by an ordinary dependency edge, which is a mechanism this
+    // ecosystem already trusts to hold a cross-repository invariant.
+    std::string hdrRoot;    // the directory that CONTAINS include/c++/v1
     {
-        const auto v1 = std::filesystem::path(tc) / "include" / "c++" / "v1";
         std::error_code ec;
-        if (!std::filesystem::is_directory(v1, ec)) {
-            std::cerr <<
-                "std-freestanding: the resolved toolchain payload carries no\n"
-                "  libc++ headers.\n"
-                "\n"
-                "  Looked for: " << v1.string() << "\n"
-                "\n"
-                "  ⚠️ This is a packaging gap, not a property of the host or of\n"
-                "  freestanding C++. libc++'s headers are host-independent text, and\n"
-                "  the same clang cross-compiling to this target reads them the same\n"
-                "  way everywhere. The known case is the Windows LLVM payload, which\n"
-                "  builds clang against the MSVC standard library for Windows-hosted\n"
-                "  work and ships no libc++ at all — which also takes libc++ away\n"
-                "  from the cross-compilations that payload could otherwise serve.\n"
-                "\n"
-                "  What this package adds on top of those headers is the one thing\n"
-                "  libc++ does not ship for a cross target: `__config_site`, which\n"
-                "  exists only under the payload's own host triple. Measured without\n"
-                "  it, all 34 of the standard's freestanding-mandated headers fail on\n"
-                "  the first line of `__config`.\n"
-                "\n"
-                "  Build from a host whose LLVM payload carries libc++ (Linux and\n"
-                "  macOS both do), or fix the payload.\n";
-            return 1;
+        if (std::filesystem::is_directory(
+                std::filesystem::path(tc) / "include" / "c++" / "v1", ec)) {
+            hdrRoot = tc;
+        } else if (const char* pk = mcpp::xpkg_dir("xim", "libcxx-headers");
+                   pk && *pk
+                   && std::filesystem::is_directory(
+                          std::filesystem::path(pk) / "include" / "c++" / "v1", ec)) {
+            hdrRoot = pk;
         }
     }
 
+    if (hdrRoot.empty()) {
+        std::cerr <<
+            "std-freestanding: no libc++ headers were found.\n"
+            "\n"
+            "  Looked in the toolchain payload:\n"
+            "    " << (std::filesystem::path(tc) / "include" / "c++" / "v1").string() << "\n"
+            "  and in the `xim:libcxx-headers` package, which was not installed.\n"
+            "\n"
+            "  ⚠️ This is a packaging gap, not a property of the host or of\n"
+            "  freestanding C++. libc++'s headers are host-independent text, and\n"
+            "  the same clang cross-compiling to this target reads them the same\n"
+            "  way everywhere. The known case is the Windows LLVM payload, which\n"
+            "  builds clang against the MSVC standard library for Windows-hosted\n"
+            "  work and ships no libc++ at all — which also takes libc++ away\n"
+            "  from the cross-compilations that payload could otherwise serve.\n"
+            "\n"
+            "  What this package adds on top of those headers is the one thing\n"
+            "  libc++ does not ship for a cross target: `__config_site`, which\n"
+            "  exists only under the payload's own host triple. Measured without\n"
+            "  it, all 34 of the standard's freestanding-mandated headers fail on\n"
+            "  the first line of `__config`.\n"
+            "\n"
+            "  Install the headers:  xlings install libcxx-headers -y\n";
+        return 1;
+    }
+
     mcpp::include_dir(cfgdir.c_str());
-    mcpp::include_dir(std::format("{}/include/c++/v1", tc).c_str());
-    mcpp::include_dir(std::format("{}/share/libc++/v1", tc).c_str());  // std/<h>.inc
+    mcpp::include_dir(std::format("{}/include/c++/v1", hdrRoot).c_str());
+    mcpp::include_dir(std::format("{}/share/libc++/v1", hdrRoot).c_str());  // std/<h>.inc
 
     // ── The C headers, when the target has no C library ──────────────────
     //

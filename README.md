@@ -144,7 +144,7 @@ on. Nothing about building for `riscv64-none-elf` ought to depend on the host.
 |---|---|
 | Linux | yes |
 | macOS | yes |
-| Windows | **no**, and the cause is in the payload |
+| Windows | yes, once `xim:libcxx-headers` is installed — see below |
 
 ⚠️ **The obvious reading is wrong twice over, and the second-obvious reading is
 wrong too.** It is not that freestanding C++ needs an operating system, and it is
@@ -165,8 +165,19 @@ have":
 
 The Windows LLVM payload builds clang against the MSVC standard library for
 Windows-hosted work and ships no libc++ at all — which also removes libc++ from
-every cross-compilation that payload could otherwise serve. That is the whole of
-the gap, and the fix belongs in the payload.
+every cross-compilation that payload could otherwise serve.
+
+⭐ **So the headers come from a package instead.** `build.mcpp` tries two sources
+in order: the toolchain payload, and — only if that carries none —
+`xim:libcxx-headers`, a host-independent archive of exactly the files the
+payload would have shipped (943,836 bytes, one artifact for all five hosts).
+
+⚠️ **The order is what makes this invisible where nothing was broken.** On Linux
+and macOS the payload answers and the package is never consulted; the compile
+line is byte-for-byte what it was, which matters because this package's output
+IS a compile line and a changed one would move every consumer's build-cache key.
+CI asserts both directions: the Windows row must reach the package, and the
+others must not.
 
 ### Would the MSVC standard library do instead?
 
@@ -175,19 +186,46 @@ freestanding mode. Its headers rest on the Windows C runtime — `<vcruntime.h>`
 the UCRT, `__declspec` — and none of that exists for `riscv64-none-elf`. The
 missing piece is not a switch; it is the layer underneath.
 
-⚠️ That paragraph is reasoning rather than measurement, so CI measures it: the
-Windows job reports what the payload actually carries, instead of this file
-asserting it.
+⚠️ **That paragraph is still reasoning rather than measurement, and one of its
+supporting arguments has since been measured and found false.** The tempting
+objection "a bare-metal triple cannot be combined with the MSVC ABI" is wrong:
+clang accepts `riscv64-pc-windows-msvc`. Disproving an objection does not
+establish a conclusion, so the question went back to open rather than closed.
+
+CI now asks the machine directly: an informational, allowed-to-fail step on the
+Windows row compiles `#include <array>` for `riscv64-none-elf` against the MSVC
+standard library and records the first error, with the same compile for
+`x86_64-pc-windows-msvc` as a control. Nothing here depends on the answer — the
+step exists because one error message from the machine that can produce it is
+worth more than a paragraph written from memory.
 
 ### And libstdc++?
 
-⭐ Measured on the host: `-D_GLIBCXX_HOSTED=0` alone compiles **29 of the 34**
-mandated headers, with no configuration synthesis whatsoever. The five that fail
-— `<system_error>` `<charconv>` `<string>` `<cmath>` `<random>` — are the C++26
-additions to the freestanding set that GCC 16 has not implemented yet.
+⚠️ **The number below was labelled correctly and the conclusion drawn from it
+was not.** "Measured on the host" is exactly what it was, and a host measurement
+says nothing about a cross target — which is the only thing this package is for.
 
-So a libstdc++ backend would be *simpler* than the libc++ one rather than a
-parallel effort, and it is a plausible future direction. It is not a fix for the
+Re-measured, same 40 headers, same libstdc++ 16.1.0, same
+`-D_GLIBCXX_HOSTED=0`, changing only the target:
+
+| Target | Result |
+|---|---|
+| `x86_64-linux-gnu` (host) | **40 / 40 compile** |
+| `riscv64-none-elf` (bare) | **0 / 40** |
+
+```
+bits/c++config.h:733:
+bits/os_defines.h:39: fatal error: 'features.h' file not found
+```
+
+⭐ **So the question is not which implementation, but whether that implementation
+was CONFIGURED for the target.** libc++'s per-target configuration is one flat
+macro file and can be synthesised — which is what this package does. libstdc++'s
+is a configure output that pulls in the host C library, so serving a bare-metal
+target needs a libstdc++ that was *built* for it, not a macro.
+
+A libstdc++ backend is therefore not "simpler than the libc++ one"; it is a
+different and larger thing. It is not a fix for the
 Windows gap, though: mcpp's target row for `riscv64-none-elf` resolves llvm, and
 no libstdc++ reaches that target in this ecosystem today.
 
