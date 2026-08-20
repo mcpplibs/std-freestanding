@@ -11,8 +11,43 @@
 [package]
 namespace   = "mcpplibs"
 name        = "std-freestanding"
-version     = "0.2.0"
+version     = "0.3.0"
 description = "The freestanding subset of the C++ standard library as a module — import mcpplibs.std.freestanding"
 license     = "Apache-2.0"
 authors     = ["mcpplibs"]
 repo        = "https://github.com/mcpplibs/std-freestanding"
+
+# ── The allocating half of the subset ────────────────────────────────────────
+#
+# ⚠️ `alloc` DOES NOT CHANGE WHAT COMPILES. All 103 headers are included
+# unconditionally and `std::vector` compiles today; what fails is the LINK,
+# because a freestanding target has no compiled libc++ and therefore no
+# `operator new`. The feature is a switch over what links, not over what exists.
+#
+#   needs nothing   array span optional expected atomic string_view ranges
+#                   algorithm bit charconv concepts type_traits tuple utility
+#   needs `alloc`   vector string deque list map set unordered_* function any
+#                   make_unique, and the default coroutine frame
+#
+# `operator new` is a whole-program singleton, so the implementation is a
+# separate package and the choice belongs to the program. `alloc` states the
+# requirement; `alloc-kal` and `alloc-libc` each state it AND bring an
+# implementation, so the ordinary consumer writes one feature and nothing else.
+#
+# Two providers in one graph are reported when the graph resolves, naming both
+# packages — which is the reason for the indirection, since two definitions
+# reaching the link produce a duplicate symbol that names a mangled operator.
+[features]
+default    = []
+alloc      = { requires = ["freestanding-allocator"] }
+alloc-kal  = { implies = ["alloc"] }
+alloc-libc = { implies = ["alloc"] }
+
+# Resolved only when the corresponding feature is active, so this package
+# carries no dependency on either implementation and a consumer that uses only
+# the non-allocating half pulls neither.
+[feature-deps.alloc-kal]
+std-freestanding-alloc-kal = "0.1.x"
+
+[feature-deps.alloc-libc]
+std-freestanding-alloc-libc = "0.1.x"
