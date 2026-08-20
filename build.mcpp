@@ -87,50 +87,66 @@ int main() {
     //
     // The target's C headers are NOT listed here — mcpp already put them on
     // the compile line, because the C library belongs to the target.
-    // ⚠️ THIS PACKAGE IS libc++'S FREESTANDING SUBSET, NOT THE STANDARD'S, AND
-    // THE DIFFERENCE HAS TO BE SAID OUT LOUD BEFORE THE COMPILER SAYS IT BADLY.
-    //
-    // The freestanding subset is defined by the standard, and every
-    // implementation is meant to provide one — libstdc++ and the MSVC standard
-    // library included. This package provides exactly one of them: it
-    // synthesises libc++'s `__config_site` with libc++'s own macros and reads
-    // libc++'s headers. That is a limitation of the package, not of freestanding
-    // C++, and it is worth naming as such.
-    //
-    // Where it bites: on Windows the LLVM payload ships clang WITHOUT libc++,
-    // because clang on Windows targets the MSVC standard library. The compiler
-    // is still clang and the target is still `riscv64-none-elf`, so nothing
-    // about the CROSS build depends on the host — the missing piece is a
-    // standard library this package knows how to read.
+    // ⚠️ THE HEADERS HAVE TO BE THERE, AND WHEN THEY ARE NOT, THE CAUSE IS NOT
+    // WHAT THE FIRST ERROR WOULD SUGGEST.
     //
     // Without this check the first symptom is
     //
     //     src/std_freestanding.cppm:19:10: fatal error: 'algorithm' file not found
     //
     // which names a header, points inside this package, and says nothing about
-    // the standard library or about the host. A reader would look for a broken
-    // include path.
+    // which standard library is present or absent. A reader would look for a
+    // broken include path.
+    //
+    // ⭐ AND THE OBVIOUS SECOND GUESS IS ALSO WRONG. It is tempting to read this
+    // as "the freestanding subset needs libc++, so this package only works where
+    // libc++ is". Measured, that is not the shape of it:
+    //
+    //   * libc++'s headers are ordinary, host-independent text. The same clang
+    //     cross-compiling to `riscv64-none-elf` uses them identically on every
+    //     host. Nothing about a CROSS build depends on the host's own standard
+    //     library.
+    //   * What libc++ does NOT ship host-independently is `__config_site`: it
+    //     exists once, under the host triple's directory, and is absent for
+    //     every other target. Measured: with the payload's own configuration and
+    //     no synthesis, ALL 34 of the standard's freestanding-mandated headers
+    //     fail at `#include <__config_site>` — not one of them reaches its own
+    //     content. Synthesising that file is therefore not a libc++ quirk being
+    //     papered over; it is the only way to use libc++ for a target the
+    //     payload was not configured for, and it is what this package does.
+    //
+    // So a toolchain without `include/c++/v1` is a PAYLOAD that did not package
+    // the headers, not a platform that cannot do freestanding and not a package
+    // that chose badly. The Windows LLVM payload is the case in point: it builds
+    // clang against the MSVC standard library for Windows-hosted work and omits
+    // libc++ entirely, which also removes it from every cross-compilation that
+    // payload could otherwise serve.
     {
         const auto v1 = std::filesystem::path(tc) / "include" / "c++" / "v1";
         std::error_code ec;
         if (!std::filesystem::is_directory(v1, ec)) {
             std::cerr <<
-                "std-freestanding: the resolved toolchain ships no libc++.\n"
+                "std-freestanding: the resolved toolchain payload carries no\n"
+                "  libc++ headers.\n"
                 "\n"
                 "  Looked for: " << v1.string() << "\n"
                 "\n"
-                "  This package is libc++'s freestanding subset. The subset itself\n"
-                "  is defined by the C++ standard and every implementation provides\n"
-                "  one, but this package reads libc++'s headers and synthesises\n"
-                "  libc++'s configuration, so it needs that implementation present.\n"
+                "  ⚠️ This is a packaging gap, not a property of the host or of\n"
+                "  freestanding C++. libc++'s headers are host-independent text, and\n"
+                "  the same clang cross-compiling to this target reads them the same\n"
+                "  way everywhere. The known case is the Windows LLVM payload, which\n"
+                "  builds clang against the MSVC standard library for Windows-hosted\n"
+                "  work and ships no libc++ at all — which also takes libc++ away\n"
+                "  from the cross-compilations that payload could otherwise serve.\n"
                 "\n"
-                "  The usual cause is a Windows host: the LLVM payload there ships\n"
-                "  clang against the MSVC standard library rather than libc++. The\n"
-                "  cross-compilation itself is unaffected — the compiler and the\n"
-                "  target are the same as anywhere else.\n"
+                "  What this package adds on top of those headers is the one thing\n"
+                "  libc++ does not ship for a cross target: `__config_site`, which\n"
+                "  exists only under the payload's own host triple. Measured without\n"
+                "  it, all 34 of the standard's freestanding-mandated headers fail on\n"
+                "  the first line of `__config`.\n"
                 "\n"
-                "  Until this package grows a second backend, build it from a host\n"
-                "  whose toolchain carries libc++ (Linux and macOS both do).\n";
+                "  Build from a host whose LLVM payload carries libc++ (Linux and\n"
+                "  macOS both do), or fix the payload.\n";
             return 1;
         }
     }

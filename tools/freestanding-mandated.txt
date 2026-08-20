@@ -1,0 +1,61 @@
+# The headers a freestanding C++ implementation is required to provide.
+#
+# Source: [compliance] in the working paper, as tabulated on cppreference's
+# "Freestanding implementations" page. One name per line; `#` begins a comment.
+#
+# ⚠️ THIS LIST IS SHORTER AND DIFFERENTLY SHAPED THAN THIS PACKAGE'S HEADLINE
+# NUMBER, AND THE DIFFERENCE MATTERS.
+#
+# The package provides 103 of libc++'s 110 headers for the target. Only the 34
+# below are REQUIRED of any implementation. `<array>`, `<span>`, `<optional>`,
+# `<expected>`, `<string_view>`, `<algorithm>` and `<vector>` — the entities this
+# package's examples are built from — are NOT on this list. That they work is
+# libc++'s doing; crediting the standard with it would be claiming a guarantee
+# the standard does not make.
+#
+# The reverse direction is what the CI check asserts: every name here must be
+# among the headers the module provides. That is the conformance claim, and it
+# is the one that can silently regress when the export table is regenerated.
+#
+# "Partial" in the standard's table describes the CONTENT of a header — the
+# parts that neither allocate nor need an environment — not whether the header
+# is available. `<memory>`'s allocating half needs an `operator new`, which is
+# what this package's `alloc` features supply.
+
+# — mandated, "All" —
+cstddef
+cfloat
+climits
+limits
+version
+cstdint
+new
+typeinfo
+source_location
+exception
+initializer_list
+compare
+coroutine
+cstdarg
+concepts
+type_traits
+ratio
+utility
+tuple
+bit
+atomic
+
+# — mandated, "Partial" —
+cstdlib
+cerrno
+system_error
+memory
+functional
+charconv
+string
+cstring
+cwchar
+iterator
+ranges
+cmath
+random

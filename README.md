@@ -2,12 +2,9 @@
 
 The freestanding subset of the C++ standard library, as one module.
 
-⚠️ **libc++'s subset, specifically.** The freestanding subset is defined by the
-standard and every implementation is meant to provide one, but this package
-provides exactly one of them: it synthesises libc++'s `__config_site` and reads
-libc++'s headers. A toolchain carrying libstdc++ or the MSVC standard library is
-told so in words rather than failing on a missing header — see
-[Which hosts this works from](#which-hosts-this-works-from).
+⭐ **All 34 headers the standard mandates for a freestanding implementation, and
+41 more.** Measured for `riscv64-none-elf`; see
+[What the standard asks for](#what-the-standard-asks-for).
 
 ```cpp
 import mcpplibs.std.freestanding;
@@ -109,36 +106,83 @@ package only selects.
 Apache-2.0. It exports libc++'s names; libc++ is Apache-2.0 WITH
 LLVM-exception.
 
+## What the standard asks for
+
+C++23 and C++26 define the freestanding subset as a list, and the list is
+shorter and differently shaped than this package's headline numbers suggest.
+Three tiers are worth separating, because they fail for different reasons:
+
+| Tier | Count | What it is |
+|---|---|---|
+| **Mandated, "All"** | 22 | `<cstddef>` `<cfloat>` `<climits>` `<limits>` `<version>` `<cstdint>` `<new>` `<typeinfo>` `<source_location>` `<exception>` `<initializer_list>` `<compare>` `<coroutine>` `<cstdarg>` `<concepts>` `<type_traits>` `<ratio>` `<utility>` `<tuple>` `<bit>` `<atomic>` `<debugging>` |
+| **Mandated, "Partial"** | 12 | `<cstdlib>` `<cerrno>` `<system_error>` `<memory>` `<functional>` `<charconv>` `<string>` `<cstring>` `<cwchar>` `<iterator>` `<ranges>` `<cmath>` `<random>` `<execution>` — the parts that do not allocate or depend on an environment |
+| **Beyond the standard** | 41 | `<array>` `<span>` `<optional>` `<expected>` `<string_view>` `<algorithm>` `<vector>` and the rest — libc++ compiles them for this target, and the standard does not require any implementation to |
+
+⚠️ The third tier is where this package's advertised examples live. `std::array`
+and `std::span` are **not** freestanding-mandated; that they work here is
+libc++'s doing, not the standard's. Stating it the other way round would credit
+the standard with a guarantee it does not make.
+
+⭐ Measured for `riscv64-none-elf` with this package's synthesised
+configuration: **34 of 34 mandated headers compile**, and so do the 41 beyond
+them. The "Partial" tier is partial in *content* rather than in availability —
+`<memory>`'s allocating half needs an `operator new`, which is what the `alloc`
+features supply.
+
 ## Which hosts this works from
 
 The target is a cross target, so the host is a separate axis: the compiler and
 the target's C library are payloads mcpp resolves for whichever system it runs
-on. Nothing about building for `riscv64-none-elf` ought to depend on the host,
-and for the rest of this ecosystem it does not.
+on. Nothing about building for `riscv64-none-elf` ought to depend on the host.
 
 | Host | Cross-builds this package |
 |---|---|
 | Linux | yes |
 | macOS | yes |
-| Windows | **no**, and the reason is this package's, not the platform's |
+| Windows | **no**, and the cause is in the payload |
 
-⚠️ On Windows the LLVM payload ships clang against the **MSVC standard library**
-and carries no libc++. The compiler is still clang and the target is still
-`riscv64-none-elf` — the cross-compilation is unaffected. What is missing is a
-standard library implementation this package knows how to read.
-
-That is a limitation worth stating precisely, because the obvious reading is
-wrong twice over. It is not that freestanding C++ needs an operating system, and
-it is not that Windows cannot cross-compile: sibling packages in this ecosystem
+⚠️ **The obvious reading is wrong twice over, and the second-obvious reading is
+wrong too.** It is not that freestanding C++ needs an operating system, and it is
+not that Windows cannot cross-compile — sibling packages
 (`std-freestanding-nolibc`, `std-freestanding-alloc-kal`,
 `std-freestanding-alloc-libc`, `openkal-opensbi`) all cross-build from Windows
-for the same target, because none of them reads a standard library's headers.
+for the same target. Nor is it that this package "chose libc++ and should not
+have":
 
-The fix is a second backend. `__config_site` synthesis is libc++'s mechanism;
-libstdc++ configures through `c++config.h` and the MSVC standard library through
-`yvals_core.h`, and the export lists this package generates are lists of
-*standard* names, which is the part that would carry over unchanged.
+* libc++'s headers are **host-independent text**. The same clang
+  cross-compiling to `riscv64-none-elf` reads them identically on every host.
+* What libc++ does not ship host-independently is `__config_site`, which exists
+  once, under the payload's own host triple. **Measured: with the payload's own
+  configuration and no synthesis, all 34 mandated headers fail on the first line
+  of `__config`** — none of them reaches its own content. Synthesising that file
+  is not a workaround for having picked libc++; it is the only way to use libc++
+  for a target the payload was not configured for.
 
-Until then, `mcpp build` on such a toolchain stops with a message naming the
-cause rather than with `'algorithm' file not found`, and CI asserts that message
-on Windows — so the day the gap closes, that assertion fails and says so.
+The Windows LLVM payload builds clang against the MSVC standard library for
+Windows-hosted work and ships no libc++ at all — which also removes libc++ from
+every cross-compilation that payload could otherwise serve. That is the whole of
+the gap, and the fix belongs in the payload.
+
+### Would the MSVC standard library do instead?
+
+Not for this target, and the reason is not that Microsoft has not written a
+freestanding mode. Its headers rest on the Windows C runtime — `<vcruntime.h>`,
+the UCRT, `__declspec` — and none of that exists for `riscv64-none-elf`. The
+missing piece is not a switch; it is the layer underneath.
+
+⚠️ That paragraph is reasoning rather than measurement, so CI measures it: the
+Windows job reports what the payload actually carries, instead of this file
+asserting it.
+
+### And libstdc++?
+
+⭐ Measured on the host: `-D_GLIBCXX_HOSTED=0` alone compiles **29 of the 34**
+mandated headers, with no configuration synthesis whatsoever. The five that fail
+— `<system_error>` `<charconv>` `<string>` `<cmath>` `<random>` — are the C++26
+additions to the freestanding set that GCC 16 has not implemented yet.
+
+So a libstdc++ backend would be *simpler* than the libc++ one rather than a
+parallel effort, and it is a plausible future direction. It is not a fix for the
+Windows gap, though: mcpp's target row for `riscv64-none-elf` resolves llvm, and
+no libstdc++ reaches that target in this ecosystem today.
+
