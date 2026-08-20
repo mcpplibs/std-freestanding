@@ -11,7 +11,7 @@
 [package]
 namespace   = "mcpplibs"
 name        = "std-freestanding"
-version     = "0.3.1"
+version     = "0.3.2"
 description = "The freestanding subset of the C++ standard library as a module — import mcpplibs.std.freestanding"
 license     = "Apache-2.0"
 authors     = ["mcpplibs"]
@@ -47,17 +47,26 @@ alloc-libc = { implies = ["alloc"] }
 # carries no dependency on either implementation and a consumer that uses only
 # the non-allocating half pulls neither.
 #
-# ⚠️ `"0.1"` and NOT `"0.1.x"`. 0.3.0 used the second form, copied from the
-# documented `[feature-deps]` example, and it does not resolve — the literal
-# reaches the installer, which has no such selector. Measured against a control:
-# `cmdline = "0.0.1"` resolves, `cmdline = "0.0"` resolves, `cmdline = "0.0.x"`
-# does not. A two-segment prefix expresses the same intent and works.
+# ⚠️ `"^0.1.0"`, and getting here took three attempts. The two that failed are
+# worth recording, because each was defeated by a criterion that was too weak.
 #
-# The defect was invisible in development because every local test used a path
-# dependency, which never consults the index. A feature whose implementation
-# cannot be fetched is a feature that does not exist.
+#   0.3.0  `"0.1.x"`  — copied from the documented `[feature-deps]` example.
+#                       The literal reaches the installer, which has no such
+#                       selector: `E_NOT_FOUND`, naming the PACKAGE.
+#   0.3.1  `"0.1"`    — chosen because it did not produce `E_NOT_FOUND`. It
+#                       resolves and then fails one step later with
+#                       `install path missing after fetch`.
+#
+# ⭐ "No E_NOT_FOUND" is not the same as "installs", and "installs" is not the
+# same as "builds". The criterion that settles it is a BUILD against the real
+# index; measured for `0.1.0`, `^0.1.0`, `^0.1` and `>=0.1.0, <0.2.0`, all of
+# which fetch, while a bare two-segment `0.1` does not.
+#
+# None of this was visible in development, because every local test used a path
+# dependency — and a path dependency never consults the index. A feature whose
+# implementation cannot be fetched is a feature that does not exist.
 [feature-deps.alloc-kal]
-std-freestanding-alloc-kal = "0.1"
+std-freestanding-alloc-kal = "^0.1.0"
 
 [feature-deps.alloc-libc]
-std-freestanding-alloc-libc = "0.1"
+std-freestanding-alloc-libc = "^0.1.0"
