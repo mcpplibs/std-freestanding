@@ -78,9 +78,19 @@ jobs:
       #
       # A build of the examples is the cheapest way to make that true, and it
       # exercises the package on the way.
+      # ⚠️ TWICE, AND THE FIRST IS ALLOWED TO FAIL. The lazy install happens
+      # DURING a build, so the first build on a machine that has never targeted
+      # this triple compiles sources needing the C library's headers before they
+      # exist — measured: `'inttypes.h' file not found`, and `'stdio.h' file not
+      # found` inside the board package. The second build has them.
+      #
+      # A single build was enough while this ran on a warm runner image; it
+      # stopped being enough, and the failure named headers rather than the
+      # install that had not happened yet.
       - name: Make the target world exist (mcpp installs it lazily)
         run: |
-          cd examples/probe && mcpp build && cd -
+          (cd examples/probe && mcpp build) || true
+          (cd examples/probe && mcpp build)
 
       - name: The header list is MEASURED, and still holds
         run: |
@@ -266,6 +276,13 @@ jobs:
 
       - name: The subset cross-builds
         run: |
+          # ⚠️ TWICE, AND THE FIRST IS ALLOWED TO FAIL — every row of this
+          # matrix is a machine that has never targeted this triple, which is
+          # precisely where mcpp's lazy install of the target C library shows.
+          # The first build compiles sources needing its headers before they
+          # exist; the second has them. A single build here reported a
+          # portability failure that was really a cold-machine one.
+          mcpp build --target riscv64-none-elf || true
           mcpp build --target riscv64-none-elf
 
   # ---------------------------------------------------------------------------
