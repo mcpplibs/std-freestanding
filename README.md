@@ -6,6 +6,11 @@ The freestanding subset of the C++ standard library, as one module.
 41 more.** Measured for `riscv64-none-elf`; see
 [What the standard asks for](#what-the-standard-asks-for).
 
+⚠️ On the **zero-libc tier** the count is 94 of 103, and the nine that fall away
+are named rather than counted: `cinttypes` `cmath` `complex` `cstdlib`
+`exception` `format` `print` `random` `valarray`. That set is asserted to equal
+the generator's own exclusion list, so the two cannot drift apart.
+
 ```cpp
 import mcpplibs.std.freestanding;
 

@@ -217,7 +217,27 @@ jobs:
       # check compiles the headers one at a time on a target whose sysroot is
       # empty and asserts how many succeed. A drop means a shim regressed; a
       # rise means the exclusion list is stale.
-      - name: The subset compiles on a target with NO C library — 94 of 103
+      # ⚠️ TWO CLAIMS, AND THE SECOND ONE USED TO BE MEASURED THROUGH A LEAK.
+      #
+      # The first is that the MODULE works with no C library beneath it, which a
+      # consumer project is exactly the right way to show.
+      #
+      # The second is how many of the 103 headers still compile there, and that
+      # is a property of THIS package's compile rather than of a consumer's. The
+      # step used to measure it by compiling `#include <array>` inside the
+      # consumer project, which worked only while `include_dir` leaked from a
+      # dependency to its consumer. It is package-private by design — this
+      # package's own build program says so, and it is why
+      # `std-freestanding-nolibc` cannot add its headers for us. When the leak
+      # closed, the step reported `zero-libc: 0 compile, 103 do not` without
+      # anything about the package having changed.
+      #
+      # A measurement that depends on a leak is not a measurement. The probe now
+      # lives in `tools/probe-zero-libc.sh`, uses this package's own include
+      # paths, and additionally asserts that the failing set is exactly
+      # `NOLIBC_EXCLUDE` — so the probe and the generator cannot drift into two
+      # separately-plausible lists.
+      - name: The module works with no C library beneath it
         run: |
           set -euo pipefail
           rm -rf /tmp/zl && mkdir -p /tmp/zl/src
@@ -248,20 +268,23 @@ jobs:
               for (;;) {}
           }
           EOF
-          (cd /tmp/zl && mcpp build --target riscv64-none-elf 2>&1 | tail -3)
+          ( cd /tmp/zl && mcpp build --target riscv64-none-elf 2>&1 | tail -3 )
           echo "the module itself compiles with no C library beneath it"
 
-          # And the per-header count, which is what the number in the manifest claims.
-          ok=0; bad=0
-          for h in $(grep -oE '^#include <[a-z_]+>' src/std_freestanding.cppm \
-                     | sed 's/#include <//;s/>//'); do
-            printf '#include <%s>\nextern "C" void _start(){for(;;){}}\n' "$h" \
-              > /tmp/zl/src/main.cpp
-            if (cd /tmp/zl && mcpp build --target riscv64-none-elf >/dev/null 2>&1)
-            then ok=$((ok+1)); else bad=$((bad+1)); fi
-          done
-          echo "zero-libc: $ok compile, $bad do not"
-          test "$ok" -ge 94 || { echo "expected at least 94"; exit 1; }
+      - name: How many of the 103 compile there — 94, and the nine are named
+        run: |
+          set -euo pipefail
+          # The synthesised `__config_site` the build above produced. libc++
+          # ships that file only for the payload's own host triple, so a cross
+          # target has none and this package generates one; re-deriving it here
+          # would be the same decision written twice.
+          CFG="$(find /tmp/zl -type d -path '*/libcxx-config/c++/v1' | head -1)"
+          LLVM="$(ls -d "$HOME"/.mcpp/registry/data/xpkgs/xim-x-llvm/*/ | head -1)"
+          NLINC="$(find "$HOME/.mcpp/registry/data/xpkgs" -type d \
+                     -path '*std-freestanding-nolibc*/include' | head -1)"
+          test -n "$CFG" && test -n "$NLINC" \
+            || { echo "missing the synthesised config or the nolibc headers"; exit 1; }
+          bash tools/probe-zero-libc.sh "${LLVM%/}" "$NLINC" "$CFG"
 
       - name: It runs on the target
         working-directory: examples/probe
