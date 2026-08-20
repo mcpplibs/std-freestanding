@@ -12,7 +12,7 @@ std::ranges::sort(t, {}, &Task::prio);   // on bare metal
 ```toml
 [dependencies]
 std-freestanding = "0.2.0"
-riscv-virt-rt    = "0.3.0"   # the board: crt0, memory layout, emulator
+riscv-virt-rt    = "0.4.1"   # the board: crt0, memory layout, emulator
 ```
 
 ## Why this exists

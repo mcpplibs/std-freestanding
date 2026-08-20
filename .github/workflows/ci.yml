@@ -413,11 +413,11 @@ jobs:
 
               [dependencies]
               std-freestanding = { path = "$GITHUB_WORKSPACE", features = ["nolibc"] }
-              EOF
+EOF
               cat > /tmp/z/src/main.cpp <<'EOF'
               import mcpplibs.std.freestanding;
               extern "C" void _start() { std::array<int, 4> a{}; (void)a; for(;;){} }
-              EOF
+EOF
               (cd /tmp/z && mcpp build --target riscv64-none-elf)
 
               sed -i 's/, features = \["nolibc"\]//' /tmp/z/mcpp.toml
