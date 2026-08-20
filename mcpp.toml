@@ -11,7 +11,7 @@
 [package]
 namespace   = "mcpplibs"
 name        = "std-freestanding"
-version     = "0.3.0"
+version     = "0.3.1"
 description = "The freestanding subset of the C++ standard library as a module — import mcpplibs.std.freestanding"
 license     = "Apache-2.0"
 authors     = ["mcpplibs"]
@@ -46,8 +46,18 @@ alloc-libc = { implies = ["alloc"] }
 # Resolved only when the corresponding feature is active, so this package
 # carries no dependency on either implementation and a consumer that uses only
 # the non-allocating half pulls neither.
+#
+# ⚠️ `"0.1"` and NOT `"0.1.x"`. 0.3.0 used the second form, copied from the
+# documented `[feature-deps]` example, and it does not resolve — the literal
+# reaches the installer, which has no such selector. Measured against a control:
+# `cmdline = "0.0.1"` resolves, `cmdline = "0.0"` resolves, `cmdline = "0.0.x"`
+# does not. A two-segment prefix expresses the same intent and works.
+#
+# The defect was invisible in development because every local test used a path
+# dependency, which never consults the index. A feature whose implementation
+# cannot be fetched is a feature that does not exist.
 [feature-deps.alloc-kal]
-std-freestanding-alloc-kal = "0.1.x"
+std-freestanding-alloc-kal = "0.1"
 
 [feature-deps.alloc-libc]
-std-freestanding-alloc-libc = "0.1.x"
+std-freestanding-alloc-libc = "0.1"
