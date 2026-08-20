@@ -145,3 +145,205 @@ jobs:
             cat mutex.log; echo "std::mutex compiled on a target with no threads"; exit 1
           fi
           grep -qi mutex mutex.log
+
+  # ---------------------------------------------------------------------------
+  # The cross-compilation is performed FROM three systems, not only from Linux.
+  #
+  # Every target in this repository is a cross target, which makes the host a
+  # separate axis from the target: the compiler, the target C library and the
+  # emulator are payloads mcpp resolves for whichever system it is running on.
+  # A package that has only ever been built from Linux is a package whose
+  # consumers must use Linux, and nothing in these sources says so.
+  #
+  # ⚠️ A TOOLCHAIN AXIS IS ABSENT HERE, AND THAT IS MEASURED RATHER THAN
+  # ASSUMED. The row for a bare-metal triple names its compiler, and the
+  # command-line override does not displace it: `--toolchain gcc@16.1.0` on a
+  # `riscv64-none-elf` build resolves llvm@22.1.8 regardless. A matrix over
+  # compiler families would therefore run the same compiler on every row and
+  # report coverage it does not have. The toolchain axis belongs where the
+  # choice is real — openkal, whose declarations are compiled by three families
+  # on three systems.
+  #
+  # ⚠️ BUILD ONLY, AND DELIBERATELY. Behaviour is asserted once, above, under an
+  # emulator. Booting the same image from three systems would be a statement
+  # about the emulator rather than about this package, and "the image does what
+  # the README says" does not become more true for having been observed from
+  # macOS.
+  portability:
+    name: cross-builds from ${{ matrix.os }}
+    runs-on: ${{ matrix.os }}
+    timeout-minutes: 45
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [macos-14, windows-2022]
+    defaults:
+      run:
+        shell: bash
+    env:
+      MCPP_VERSION: 2026.8.20.2
+      XLINGS_VERSION: v2026.8.17.2
+      XLINGS_NON_INTERACTIVE: '1'
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install xlings (Unix)
+        if: runner.os != 'Windows'
+        run: |
+          curl -fsSL https://raw.githubusercontent.com/openxlings/xlings/main/tools/other/quick_install.sh \
+            | bash -s "$XLINGS_VERSION"
+          echo "$HOME/.xlings/subos/current/bin" >> "$GITHUB_PATH"
+
+      - name: Install xlings (Windows)
+        if: runner.os == 'Windows'
+        shell: pwsh
+        run: |
+          irm https://d2learn.org/xlings-install.ps1.txt | iex
+          # The installer amends the user's environment; no later step in this
+          # job reads it back, so the directory is named here.
+          "$env:USERPROFILE\.xlings\subos\current\bin" | Out-File -FilePath $env:GITHUB_PATH -Encoding utf8 -Append
+
+      - name: Install mcpp
+        run: |
+          xlings update
+          xlings install "mcpp@$MCPP_VERSION" -y -g
+          mcpp --version
+          mcpp self config --mirror GLOBAL
+
+      - name: The subset cross-builds
+        run: |
+          mcpp build --target riscv64-none-elf
+
+  # ---------------------------------------------------------------------------
+  # The features, each with the outcome it is supposed to produce.
+  #
+  # ⚠️ A MATRIX THAT ONLY BUILDS WOULD ASSERT ALMOST NOTHING HERE. `alloc` does
+  # not change what COMPILES — all 103 headers are included unconditionally and
+  # `std::vector` type-checks whether or not an allocator exists. What it
+  # changes is what LINKS. So every row below states the outcome it expects, and
+  # the row that expects a failure is the one that carries the design: without
+  # an allocator the link must fail, and it must fail NAMING the feature that
+  # fixes it, because "undefined symbol: operator new" on a bare-metal target is
+  # not a sentence a reader can act on.
+  #
+  # The package under test is the working tree, by path. Its `[feature-deps]`
+  # still resolve from the real index — which is the half that matters, since a
+  # feature whose implementation cannot be fetched is a feature that does not
+  # exist, and every local test using a path dependency is exactly how that went
+  # unnoticed through two published versions.
+  features:
+    name: feature ${{ matrix.label }} -> ${{ matrix.expect }}
+    runs-on: ubuntu-24.04
+    timeout-minutes: 40
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - { label: 'none',       spec: '',                      expect: 'link fails, naming the feature' }
+          - { label: 'alloc-libc', spec: ', features = ["alloc-libc"]', expect: 'links and runs' }
+          - { label: 'alloc-kal',  spec: ', features = ["alloc-kal"]',  expect: 'links and runs' }
+          - { label: 'nolibc',     spec: ', features = ["nolibc"]',     expect: 'compiles with no C library' }
+    env:
+      MCPP_VERSION: 2026.8.20.2
+      XLINGS_VERSION: v2026.8.17.2
+      XLINGS_NON_INTERACTIVE: '1'
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install xlings
+        run: |
+          curl -fsSL https://raw.githubusercontent.com/openxlings/xlings/main/tools/other/quick_install.sh \
+            | bash -s "$XLINGS_VERSION"
+          echo "$HOME/.xlings/subos/current/bin" >> "$GITHUB_PATH"
+
+      - name: Install mcpp
+        run: |
+          xlings update
+          xlings install "mcpp@$MCPP_VERSION" -y -g
+          mcpp self config --mirror GLOBAL
+
+      - name: Install the emulator
+        run: |
+          xlings install xim:qemu-riscv -y
+          XLINGS_HOME="$HOME/.mcpp/registry" xlings install xim:qemu-riscv -y
+
+      # A consumer, because a feature is a statement about consumers. The board
+      # supplies the entry point, the console and — for the `alloc-kal` row —
+      # the openkal implementation the allocator calls into.
+      - name: A consumer that allocates
+        run: |
+          mkdir -p /tmp/c/src
+          cat > /tmp/c/mcpp.toml <<EOF
+          [package]
+          name    = "c"
+          version = "0.1.0"
+
+          [dependencies]
+          riscv-virt-rt    = { version = "0.4.1", features = ["openkal"] }
+          std-freestanding = { path = "$GITHUB_WORKSPACE"${{ matrix.spec }} }
+          EOF
+          cat > /tmp/c/src/main.cpp <<'EOF'
+          import mcpplibs.riscv_virt_rt;
+          import mcpplibs.std.freestanding;
+          // ⚠️ extern "C". On a freestanding target `main` is not the reserved
+          // function it is in a hosted one, so an ordinary definition is
+          // mangled to `_Z4mainv` and the C library's crt0 does not find it.
+          extern "C" int main() {
+              std::vector<int> v;
+              for (int i = 1; i <= 4; ++i) v.push_back(i * 7);
+              board::printf("features vector %zu last=%d\n", v.size(), v.back());
+              return 0;
+          }
+          EOF
+
+      - name: The outcome this row expects
+        working-directory: /tmp/c
+        run: |
+          case '${{ matrix.label }}' in
+            none)
+              # The negative row. A pass here means the link failed AND said
+              # something a reader can act on.
+              if mcpp run --target riscv64-none-elf > out.log 2>&1; then
+                cat out.log
+                echo "a program that allocates linked with no allocator selected"; exit 1
+              fi
+              grep -qi 'operator new' out.log
+              grep -q  'std-freestanding' out.log
+              grep -q  'alloc-kal'        out.log
+              echo "the link failed and named the feature that fixes it"
+              ;;
+            alloc-libc|alloc-kal)
+              mcpp run --target riscv64-none-elf 2>&1 | tee out.log
+              grep -q 'features vector 4 last=28' out.log
+              ;;
+            nolibc)
+              # The two-sided criterion for this feature: with it the subset
+              # compiles against no C library, and without it the same source
+              # in the same project does not. One side alone would pass on a
+              # project that never declined the C library in the first place.
+              mkdir -p /tmp/z/src
+              cat > /tmp/z/mcpp.toml <<EOF
+              [package]
+              name    = "z"
+              version = "0.1.0"
+
+              [target.riscv64-none-elf]
+              sysroot = ""
+
+              [dependencies]
+              std-freestanding = { path = "$GITHUB_WORKSPACE", features = ["nolibc"] }
+              EOF
+              cat > /tmp/z/src/main.cpp <<'EOF'
+              import mcpplibs.std.freestanding;
+              extern "C" void _start() { std::array<int, 4> a{}; (void)a; for(;;){} }
+              EOF
+              (cd /tmp/z && mcpp build --target riscv64-none-elf)
+
+              sed -i 's/, features = \["nolibc"\]//' /tmp/z/mcpp.toml
+              if (cd /tmp/z && mcpp build --target riscv64-none-elf > /tmp/z/without.log 2>&1); then
+                cat /tmp/z/without.log
+                echo "the subset compiled with no C library and no nolibc feature"; exit 1
+              fi
+              echo "with the feature it compiles; without it, it does not"
+              ;;
+          esac
