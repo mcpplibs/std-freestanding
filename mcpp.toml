@@ -11,7 +11,7 @@
 [package]
 namespace   = "mcpplibs"
 name        = "std-freestanding"
-version     = "0.3.2"
+version     = "0.4.0"
 description = "The freestanding subset of the C++ standard library as a module — import mcpplibs.std.freestanding"
 license     = "Apache-2.0"
 authors     = ["mcpplibs"]
@@ -43,6 +43,26 @@ alloc      = { requires = ["freestanding-allocator"] }
 alloc-kal  = { implies = ["alloc"] }
 alloc-libc = { implies = ["alloc"] }
 
+# ── The subset on a target with no C library ─────────────────────────────────
+#
+# ⭐ MEASURED: with this feature active, **94 of the 103** headers below compile
+# for a target whose `[target.<triple>].sysroot` is empty. Without it, 15 of the
+# 21 most-used ones do.
+#
+# The obstacle is not that the subset wants a C library. libc++ ships WRAPPERS
+# for the C headers — `include/c++/v1/string.h` and its siblings — which reach
+# the real header through `#include_next` to obtain `size_t`, `mbstate_t`,
+# `time_t` and `EOF`. With no C library the chain has nothing to continue to,
+# and the wrapper fails on a missing TYPE rather than a missing header, which is
+# why the cause is not obvious from the error.
+#
+# ⚠️ The feature exists because a dependency cannot do this for itself:
+# `include-dir` is package-private, so `std-freestanding-nolibc` can only use
+# its own headers. This package asks mcpp where that package landed and adds
+# the directory to ITS OWN compile, after libc++'s — see build.mcpp for why the
+# order is load-bearing.
+nolibc     = {}
+
 # Resolved only when the corresponding feature is active, so this package
 # carries no dependency on either implementation and a consumer that uses only
 # the non-allocating half pulls neither.
@@ -70,3 +90,6 @@ std-freestanding-alloc-kal = "^0.1.0"
 
 [feature-deps.alloc-libc]
 std-freestanding-alloc-libc = "^0.1.0"
+
+[feature-deps.nolibc]
+std-freestanding-nolibc = "^0.2.0"

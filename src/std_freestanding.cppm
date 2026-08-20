@@ -4,6 +4,17 @@
 // every libc++ header that compiles for a freestanding target, measured by
 // compiling each one.
 //
+// ⚠️ NINE HEADERS ARE GUARDED BY `MCPP_FEATURE_NOLIBC`, AND THE LIST IS MEASURED.
+//
+// On a target whose `[target.<triple>].sysroot` is empty there is no C library
+// at all. 94 of the 103 headers below still compile — the `nolibc` feature
+// supplies the four C headers libc++'s own wrappers reach for — but nine want a
+// real one (`cmath` wants the math library's declarations, `cstdlib` its
+// allocator and process control, `format` and `print` its I/O). Those nine are
+// compiled out rather than left to fail, and their export tables with them: an
+// export table naming declarations that are absent is an error in the module
+// interface, not in the consumer.
+//
 // ⚠️ The export table is NOT here and must never be written here. libc++ ships
 // one `std/<header>.inc` per header — each `export namespace std { using
 // std::X; }` — and maintains them. This file only SELECTS.
@@ -22,13 +33,19 @@ module;
 #include <cfloat>
 #include <charconv>
 #include <chrono>
+#ifndef MCPP_FEATURE_NOLIBC
 #include <cinttypes>
+#endif
 #include <climits>
 #include <clocale>
+#ifndef MCPP_FEATURE_NOLIBC
 #include <cmath>
+#endif
 #include <codecvt>
 #include <compare>
+#ifndef MCPP_FEATURE_NOLIBC
 #include <complex>
+#endif
 #include <concepts>
 #include <condition_variable>
 #include <coroutine>
@@ -38,20 +55,26 @@ module;
 #include <cstddef>
 #include <cstdint>
 #include <cstdio>
+#ifndef MCPP_FEATURE_NOLIBC
 #include <cstdlib>
+#endif
 #include <cstring>
 #include <ctime>
 #include <cuchar>
 #include <cwchar>
 #include <cwctype>
 #include <deque>
+#ifndef MCPP_FEATURE_NOLIBC
 #include <exception>
+#endif
 #include <execution>
 #include <expected>
 #include <filesystem>
 #include <flat_map>
 #include <flat_set>
+#ifndef MCPP_FEATURE_NOLIBC
 #include <format>
+#endif
 #include <forward_list>
 #include <fstream>
 #include <functional>
@@ -77,9 +100,13 @@ module;
 #include <numeric>
 #include <optional>
 #include <ostream>
+#ifndef MCPP_FEATURE_NOLIBC
 #include <print>
+#endif
 #include <queue>
+#ifndef MCPP_FEATURE_NOLIBC
 #include <random>
+#endif
 #include <ranges>
 #include <ratio>
 #include <regex>
@@ -107,7 +134,9 @@ module;
 #include <unordered_map>
 #include <unordered_set>
 #include <utility>
+#ifndef MCPP_FEATURE_NOLIBC
 #include <valarray>
+#endif
 #include <variant>
 #include <vector>
 #include <version>
@@ -126,13 +155,19 @@ export module mcpplibs.std.freestanding;
 #include "std/cfloat.inc"
 #include "std/charconv.inc"
 #include "std/chrono.inc"
+#ifndef MCPP_FEATURE_NOLIBC
 #include "std/cinttypes.inc"
+#endif
 #include "std/climits.inc"
 #include "std/clocale.inc"
+#ifndef MCPP_FEATURE_NOLIBC
 #include "std/cmath.inc"
+#endif
 #include "std/codecvt.inc"
 #include "std/compare.inc"
+#ifndef MCPP_FEATURE_NOLIBC
 #include "std/complex.inc"
+#endif
 #include "std/concepts.inc"
 #include "std/condition_variable.inc"
 #include "std/coroutine.inc"
@@ -142,20 +177,26 @@ export module mcpplibs.std.freestanding;
 #include "std/cstddef.inc"
 #include "std/cstdint.inc"
 #include "std/cstdio.inc"
+#ifndef MCPP_FEATURE_NOLIBC
 #include "std/cstdlib.inc"
+#endif
 #include "std/cstring.inc"
 #include "std/ctime.inc"
 #include "std/cuchar.inc"
 #include "std/cwchar.inc"
 #include "std/cwctype.inc"
 #include "std/deque.inc"
+#ifndef MCPP_FEATURE_NOLIBC
 #include "std/exception.inc"
+#endif
 #include "std/execution.inc"
 #include "std/expected.inc"
 #include "std/filesystem.inc"
 #include "std/flat_map.inc"
 #include "std/flat_set.inc"
+#ifndef MCPP_FEATURE_NOLIBC
 #include "std/format.inc"
+#endif
 #include "std/forward_list.inc"
 #include "std/fstream.inc"
 #include "std/functional.inc"
@@ -181,9 +222,13 @@ export module mcpplibs.std.freestanding;
 #include "std/numeric.inc"
 #include "std/optional.inc"
 #include "std/ostream.inc"
+#ifndef MCPP_FEATURE_NOLIBC
 #include "std/print.inc"
+#endif
 #include "std/queue.inc"
+#ifndef MCPP_FEATURE_NOLIBC
 #include "std/random.inc"
+#endif
 #include "std/ranges.inc"
 #include "std/ratio.inc"
 #include "std/regex.inc"
@@ -211,7 +256,9 @@ export module mcpplibs.std.freestanding;
 #include "std/unordered_map.inc"
 #include "std/unordered_set.inc"
 #include "std/utility.inc"
+#ifndef MCPP_FEATURE_NOLIBC
 #include "std/valarray.inc"
+#endif
 #include "std/variant.inc"
 #include "std/vector.inc"
 #include "std/version.inc"

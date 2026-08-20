@@ -91,6 +91,21 @@ int main() {
     mcpp::include_dir(std::format("{}/include/c++/v1", tc).c_str());
     mcpp::include_dir(std::format("{}/share/libc++/v1", tc).c_str());  // std/<h>.inc
 
+    // ── The C headers, when the target has no C library ──────────────────
+    //
+    // ⚠️ AFTER libc++'s, and the order is the whole mechanism. libc++ ships
+    // wrappers for the C headers which reach the real one with `#include_next`;
+    // a directory placed BEFORE libc++'s is skipped by that search and the
+    // wrapper still fails. Measured: the same shim before libc++ unlocks
+    // nothing, after it unlocks 79 more headers.
+    //
+    // The path comes from asking mcpp where the dependency landed rather than
+    // from guessing the store layout. It is present only when the `nolibc`
+    // feature pulled that package, so a target that has a C library adds
+    // nothing and keeps its own headers.
+    if (const char* nl = mcpp::dep_dir("std-freestanding-nolibc"); nl && *nl)
+        mcpp::include_dir_after(std::format("{}/include", nl).c_str());
+
     mcpp::rerun_if_env_changed("MCPP_TARGET_ARCH");
     return 0;
 }
