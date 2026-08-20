@@ -2,6 +2,13 @@
 
 The freestanding subset of the C++ standard library, as one module.
 
+⚠️ **libc++'s subset, specifically.** The freestanding subset is defined by the
+standard and every implementation is meant to provide one, but this package
+provides exactly one of them: it synthesises libc++'s `__config_site` and reads
+libc++'s headers. A toolchain carrying libstdc++ or the MSVC standard library is
+told so in words rather than failing on a missing header — see
+[Which hosts this works from](#which-hosts-this-works-from).
+
 ```cpp
 import mcpplibs.std.freestanding;
 
@@ -101,3 +108,37 @@ package only selects.
 
 Apache-2.0. It exports libc++'s names; libc++ is Apache-2.0 WITH
 LLVM-exception.
+
+## Which hosts this works from
+
+The target is a cross target, so the host is a separate axis: the compiler and
+the target's C library are payloads mcpp resolves for whichever system it runs
+on. Nothing about building for `riscv64-none-elf` ought to depend on the host,
+and for the rest of this ecosystem it does not.
+
+| Host | Cross-builds this package |
+|---|---|
+| Linux | yes |
+| macOS | yes |
+| Windows | **no**, and the reason is this package's, not the platform's |
+
+⚠️ On Windows the LLVM payload ships clang against the **MSVC standard library**
+and carries no libc++. The compiler is still clang and the target is still
+`riscv64-none-elf` — the cross-compilation is unaffected. What is missing is a
+standard library implementation this package knows how to read.
+
+That is a limitation worth stating precisely, because the obvious reading is
+wrong twice over. It is not that freestanding C++ needs an operating system, and
+it is not that Windows cannot cross-compile: sibling packages in this ecosystem
+(`std-freestanding-nolibc`, `std-freestanding-alloc-kal`,
+`std-freestanding-alloc-libc`, `openkal-opensbi`) all cross-build from Windows
+for the same target, because none of them reads a standard library's headers.
+
+The fix is a second backend. `__config_site` synthesis is libc++'s mechanism;
+libstdc++ configures through `c++config.h` and the MSVC standard library through
+`yvals_core.h`, and the export lists this package generates are lists of
+*standard* names, which is the part that would carry over unchanged.
+
+Until then, `mcpp build` on such a toolchain stops with a message naming the
+cause rather than with `'algorithm' file not found`, and CI asserts that message
+on Windows — so the day the gap closes, that assertion fails and says so.

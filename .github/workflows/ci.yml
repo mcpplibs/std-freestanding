@@ -87,6 +87,26 @@ jobs:
       # A single build was enough while this ran on a warm runner image; it
       # stopped being enough, and the failure named headers rather than the
       # install that had not happened yet.
+      # ⚠️ THE INDEX EDGE DOES NOT COVER THIS BUILD, AND THE DIFFERENCE IS THE
+      # WHOLE REASON THIS STEP EXISTS.
+      #
+      # `riscv-virt-rt`'s index descriptor names `xim:picolibc-riscv` in its
+      # platform `deps`, so a CONSUMER installing that package gets the target's
+      # C library with it — measured by taking both away and watching them come
+      # back. That edge fires when the PACKAGE is installed, and a repository
+      # testing itself builds from its working tree, where nothing is installed
+      # and nothing fires.
+      #
+      # So the self-build has to be given what a consumer is given. This is not
+      # the workaround the comment it replaced described: mcpp genuinely does
+      # not install a target's C library — it only looks one up on disk — and
+      # the install-time edge in the index is where that gap is closed for
+      # everyone except a repository building itself.
+      - name: Install the target C library (the index edge covers consumers, not this)
+        run: |
+          xlings install xim:picolibc-riscv -y
+          XLINGS_HOME="$HOME/.mcpp/registry" xlings install xim:picolibc-riscv -y
+
       - name: Make the target world exist (mcpp installs it lazily)
         run: |
           (cd examples/probe && mcpp build) || true
@@ -274,14 +294,39 @@ jobs:
           mcpp --version
           mcpp self config --mirror GLOBAL
 
+      # ⚠️ TWICE, AND THE FIRST IS ALLOWED TO FAIL — every row of this matrix is
+      # a machine that has never targeted this triple, which is where mcpp's
+      # lazy install of the toolchain payload shows.
+      #
+      # ⚠️ AND THE WINDOWS ROW ASSERTS A DIAGNOSTIC RATHER THAN A BUILD, WHICH
+      # IS A CONCESSION AND IS RECORDED AS ONE.
+      #
+      # The freestanding subset is defined by the C++ standard, and every
+      # implementation provides one — so nothing about a cross build to
+      # `riscv64-none-elf` should depend on the host. This package, however, is
+      # libc++'s subset specifically: it synthesises libc++'s `__config_site`
+      # and reads libc++'s headers. On Windows the LLVM payload ships clang
+      # against the MSVC standard library and carries no libc++, so the package
+      # cannot work there yet.
+      #
+      # Deleting the row would report coverage this package does not have.
+      # Asserting the diagnostic keeps the gap visible AND retires itself: the
+      # day a second backend or a libc++-carrying Windows payload arrives, this
+      # step fails and says so, instead of being forgotten.
       - name: The subset cross-builds
         run: |
-          # ⚠️ TWICE, AND THE FIRST IS ALLOWED TO FAIL — every row of this
-          # matrix is a machine that has never targeted this triple, which is
-          # precisely where mcpp's lazy install of the target C library shows.
-          # The first build compiles sources needing its headers before they
-          # exist; the second has them. A single build here reported a
-          # portability failure that was really a cold-machine one.
+          if [ "$RUNNER_OS" = "Windows" ]; then
+            if mcpp build --target riscv64-none-elf > out.log 2>&1; then
+              echo "::error::the subset now builds from Windows — this row can become a real cross-build, and the note above it is out of date"
+              exit 1
+            fi
+            grep -q "ships no libc++" out.log || {
+              cat out.log
+              echo "the failure was not the documented one; something else is wrong"
+              exit 1; }
+            echo "known gap, reported in words: the Windows payload carries no libc++"
+            exit 0
+          fi
           mcpp build --target riscv64-none-elf || true
           mcpp build --target riscv64-none-elf
 
