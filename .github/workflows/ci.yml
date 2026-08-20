@@ -58,6 +58,18 @@ jobs:
           mcpp --version
           mcpp self config --mirror GLOBAL
 
+      # ⚠️ The target C library, in every job that builds for the target.
+      # The index descriptor's `deps` edge hands it to a CONSUMER when the
+      # PACKAGE is installed; a repository building its own tree installs
+      # nothing, so that edge never fires and the build dies on
+      # `'stdio.h' file not found` or `'inttypes.h' file not found` — the second
+      # from the toolchain's own C-header wrapper, which has nothing to
+      # `#include_next` to.
+      - name: Install the target C library
+        run: |
+          xlings install xim:picolibc-riscv -y
+          XLINGS_HOME="$HOME/.mcpp/registry" xlings install xim:picolibc-riscv -y
+
       - name: Install the target world
         run: |
           # Both homes: the shim on PATH dispatches against whichever home owns
@@ -312,18 +324,6 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
-      # ⚠️ The target C library, in every job that builds for the target.
-      # The index descriptor's `deps` edge hands it to a CONSUMER when the
-      # PACKAGE is installed; a repository building its own tree installs
-      # nothing, so that edge never fires and the build dies on
-      # `'stdio.h' file not found` or `'inttypes.h' file not found` — the second
-      # from the toolchain's own C-header wrapper, which has nothing to
-      # `#include_next` to.
-      - name: Install the target C library
-        run: |
-          xlings install xim:picolibc-riscv -y
-          XLINGS_HOME="$HOME/.mcpp/registry" xlings install xim:picolibc-riscv -y
-
       - name: Install xlings (Unix)
         if: runner.os != 'Windows'
         run: |
@@ -410,6 +410,18 @@ jobs:
       # the payload CONTAINS is neither — it is the measurement, in the log, on
       # the machine that can make it, and it retires itself: when the payload
       # gains libc++ the build succeeds and this step says the note is stale.
+      # ⚠️ The target C library, in every job that builds for the target.
+      # The index descriptor's `deps` edge hands it to a CONSUMER when the
+      # PACKAGE is installed; a repository building its own tree installs
+      # nothing, so that edge never fires and the build dies on
+      # `'stdio.h' file not found` or `'inttypes.h' file not found` — the second
+      # from the toolchain's own C-header wrapper, which has nothing to
+      # `#include_next` to.
+      - name: Install the target C library
+        run: |
+          xlings install xim:picolibc-riscv -y
+          XLINGS_HOME="$HOME/.mcpp/registry" xlings install xim:picolibc-riscv -y
+
       - name: The subset cross-builds
         run: |
           if [ "$RUNNER_OS" = "Windows" ]; then
@@ -470,18 +482,6 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
-      # ⚠️ The target C library, in every job that builds for the target.
-      # The index descriptor's `deps` edge hands it to a CONSUMER when the
-      # PACKAGE is installed; a repository building its own tree installs
-      # nothing, so that edge never fires and the build dies on
-      # `'stdio.h' file not found` or `'inttypes.h' file not found` — the second
-      # from the toolchain's own C-header wrapper, which has nothing to
-      # `#include_next` to.
-      - name: Install the target C library
-        run: |
-          xlings install xim:picolibc-riscv -y
-          XLINGS_HOME="$HOME/.mcpp/registry" xlings install xim:picolibc-riscv -y
-
       - name: Install xlings
         run: |
           curl -fsSL https://raw.githubusercontent.com/openxlings/xlings/main/tools/other/quick_install.sh \
@@ -520,6 +520,18 @@ jobs:
             sleep 60
           done
           mcpp self config --mirror GLOBAL
+
+      # ⚠️ The target C library, in every job that builds for the target.
+      # The index descriptor's `deps` edge hands it to a CONSUMER when the
+      # PACKAGE is installed; a repository building its own tree installs
+      # nothing, so that edge never fires and the build dies on
+      # `'stdio.h' file not found` or `'inttypes.h' file not found` — the second
+      # from the toolchain's own C-header wrapper, which has nothing to
+      # `#include_next` to.
+      - name: Install the target C library
+        run: |
+          xlings install xim:picolibc-riscv -y
+          XLINGS_HOME="$HOME/.mcpp/registry" xlings install xim:picolibc-riscv -y
 
       - name: Install the emulator
         run: |
