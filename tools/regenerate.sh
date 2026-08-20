@@ -50,6 +50,27 @@ while read -r h; do
     else echo "  $h: host fails too (libc++ has not implemented it)"; fi
 done < "$WORK/bad"
 
+# ── The headers that need a C library, for the `nolibc` feature ─────────────
+#
+# ⚠️ MEASURED HERE, NOT LISTED BY HAND. The `nolibc` feature makes the subset
+# usable on a target whose sysroot is empty, and 94 of these headers compile
+# there once the four shim headers are on the path. The rest want a real C
+# library and are compiled out.
+#
+# The list lives in this script rather than in the module for the same reason
+# the module's own list does: a hand-written set drifts from the toolchain, and
+# the check that regeneration is a no-op is what keeps them together.
+NOLIBC_EXCLUDE="cinttypes cmath complex cstdlib exception format print random valarray"
+
+guarded() {   # $1 = template with %s for the header name
+    while read -r h; do
+        case " $NOLIBC_EXCLUDE " in
+            *" $h "*) printf '#ifndef MCPP_FEATURE_NOLIBC\n'; printf "$1\n" "$h"; printf '#endif\n' ;;
+            *)        printf "$1\n" "$h" ;;
+        esac
+    done < "$WORK/ok"
+}
+
 {
   echo "// mcpplibs.std.freestanding — the freestanding subset of the standard library."
   echo "//"
@@ -57,12 +78,20 @@ done < "$WORK/bad"
   echo "// every libc++ header that compiles for a freestanding target, measured by"
   echo "// compiling each one."
   echo "//"
+  echo "// ⚠️ NINE HEADERS ARE GUARDED BY \`MCPP_FEATURE_NOLIBC\`, AND THAT LIST IS"
+  echo "// MEASURED TOO. On a target whose sysroot is empty there is no C library at"
+  echo "// all; 94 of the headers below still compile, because the \`nolibc\` feature"
+  echo "// supplies the four C headers libc++'s own wrappers reach for. The nine that"
+  echo "// want a real one are compiled out, and their export tables with them — an"
+  echo "// export table naming absent declarations is an error in the module"
+  echo "// interface, not in the consumer."
+  echo "//"
   echo "// ⚠️ The export table is NOT here and must never be written here. libc++ ships"
   echo "// one \`std/<header>.inc\` per header — each \`export namespace std { using"
   echo "// std::X; }\` — and maintains them. This file only SELECTS."
   echo "module;"
-  sed 's|^|#include <|; s|$|>|' "$WORK/ok"
+  guarded '#include <%s>'
   echo "export module mcpplibs.std.freestanding;"
-  sed 's|^|#include "std/|; s|$|.inc"|' "$WORK/ok"
+  guarded '#include "std/%s.inc"'
 } > "$ROOT/src/std_freestanding.cppm"
 echo "wrote src/std_freestanding.cppm"

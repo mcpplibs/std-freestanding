@@ -12,7 +12,7 @@ jobs:
     runs-on: ubuntu-24.04
     timeout-minutes: 40
     env:
-      MCPP_VERSION: 2026.8.19.4
+      MCPP_VERSION: 2026.8.20.2
       XLINGS_VERSION: v2026.8.17.2
       XLINGS_NON_INTERACTIVE: '1'
     steps:
@@ -39,13 +39,30 @@ jobs:
           XLINGS_HOME="$HOME/.mcpp/registry" xlings install xim:qemu-riscv -y
           # ⚠️ NOT picolibc: mcpp installs the target's C library itself.
 
+      # ⚠️ THIS STEP EXISTS BECAUSE THE ONE BELOW NEEDS A C LIBRARY ON DISK, AND
+      # THE ONE BELOW WAS RED FROM 0.2.0 UNTIL IT WAS ADDED.
+      #
+      # mcpp resolves the target's C library from the target's own row and
+      # installs it LAZILY, during a build. The regeneration check runs before
+      # any build has happened, so it looked for a directory nothing had created
+      # yet and died on `ls: cannot access`. The comment above ("mcpp installs
+      # the target's C library itself") was true and was read as meaning the
+      # check needed nothing — it needed the install to have HAPPENED.
+      #
+      # A build of the examples is the cheapest way to make that true, and it
+      # exercises the package on the way.
+      - name: Make the target world exist (mcpp installs it lazily)
+        run: |
+          cd examples/probe && mcpp build && cd -
+
       - name: The header list is MEASURED, and still holds
         run: |
           LLVM=""
           for d in "$HOME"/.mcpp/registry/data/xpkgs/xim-x-llvm/*/; do
             [ -x "$d/bin/clang++" ] && LLVM="${d%/}"
           done
-          PICO="$(ls -d "$HOME"/.mcpp/registry/data/xpkgs/xim-x-picolibc-riscv/*/ | tail -1)"
+          PICO="$(ls -d "$HOME"/.mcpp/registry/data/xpkgs/xim-x-picolibc-riscv/*/ 2>/dev/null | tail -1)"
+          test -n "$PICO" || { echo "the target C library was never installed — the step above did not run a build"; exit 1; }
           tools/regenerate.sh "$LLVM" "${PICO%/}" | tee regen.log
           # ⚠️ Two-sided. A drop in the count means the toolchain moved; a
           # "HOST OK" line means a header regressed on the TARGET only, which
@@ -54,6 +71,60 @@ jobs:
           ! grep -q 'HOST OK' regen.log
           # Regenerating must be a no-op on a committed tree.
           git diff --exit-code src/std_freestanding.cppm
+
+      # ⚠️ THE CRITERION IS THE COUNT, NOT "IT BUILT".
+      #
+      # The `nolibc` feature exists to make the subset usable where there is no
+      # C library. A build that succeeded because the feature quietly did
+      # nothing would be indistinguishable from one where it worked, so the
+      # check compiles the headers one at a time on a target whose sysroot is
+      # empty and asserts how many succeed. A drop means a shim regressed; a
+      # rise means the exclusion list is stale.
+      - name: The subset compiles on a target with NO C library — 94 of 103
+        run: |
+          set -euo pipefail
+          rm -rf /tmp/zl && mkdir -p /tmp/zl/src
+          cat > /tmp/zl/mcpp.toml <<'EOF'
+          [package]
+          name    = "zl"
+          version = "0.1.0"
+          [build]
+          target = "riscv64-none-elf"
+          [target.riscv64-none-elf]
+          sysroot = ""
+          [dependencies]
+          std-freestanding = { path = "PLACEHOLDER", features = ["nolibc"] }
+          EOF
+          sed -i "s|PLACEHOLDER|$GITHUB_WORKSPACE|" /tmp/zl/mcpp.toml
+          cat > /tmp/zl/src/main.cpp <<'EOF'
+          import mcpplibs.std.freestanding;
+          static volatile unsigned char* const U =
+              reinterpret_cast<unsigned char*>(0x10000000);
+          extern "C" void _start() {
+              std::array<int, 5> a{5, 3, 1, 4, 2};
+              std::ranges::sort(a, std::greater<>{});
+              for (int v : a) *U = static_cast<unsigned char>('0' + v);
+              *U = '\n';
+              std::string_view sv{"zero-libc std ok"};
+              for (char c : sv) *U = static_cast<unsigned char>(c);
+              *U = '\n';
+              for (;;) {}
+          }
+          EOF
+          (cd /tmp/zl && mcpp build --target riscv64-none-elf 2>&1 | tail -3)
+          echo "the module itself compiles with no C library beneath it"
+
+          # And the per-header count, which is what the number in the manifest claims.
+          ok=0; bad=0
+          for h in $(grep -oE '^#include <[a-z_]+>' src/std_freestanding.cppm \
+                     | sed 's/#include <//;s/>//'); do
+            printf '#include <%s>\nextern "C" void _start(){for(;;){}}\n' "$h" \
+              > /tmp/zl/src/main.cpp
+            if (cd /tmp/zl && mcpp build --target riscv64-none-elf >/dev/null 2>&1)
+            then ok=$((ok+1)); else bad=$((bad+1)); fi
+          done
+          echo "zero-libc: $ok compile, $bad do not"
+          test "$ok" -ge 94 || { echo "expected at least 94"; exit 1; }
 
       - name: It runs on the target
         working-directory: examples/probe

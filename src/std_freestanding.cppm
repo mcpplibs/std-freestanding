@@ -4,15 +4,12 @@
 // every libc++ header that compiles for a freestanding target, measured by
 // compiling each one.
 //
-// ⚠️ NINE HEADERS ARE GUARDED BY `MCPP_FEATURE_NOLIBC`, AND THE LIST IS MEASURED.
-//
-// On a target whose `[target.<triple>].sysroot` is empty there is no C library
-// at all. 94 of the 103 headers below still compile — the `nolibc` feature
-// supplies the four C headers libc++'s own wrappers reach for — but nine want a
-// real one (`cmath` wants the math library's declarations, `cstdlib` its
-// allocator and process control, `format` and `print` its I/O). Those nine are
-// compiled out rather than left to fail, and their export tables with them: an
-// export table naming declarations that are absent is an error in the module
+// ⚠️ NINE HEADERS ARE GUARDED BY `MCPP_FEATURE_NOLIBC`, AND THAT LIST IS
+// MEASURED TOO. On a target whose sysroot is empty there is no C library at
+// all; 94 of the headers below still compile, because the `nolibc` feature
+// supplies the four C headers libc++'s own wrappers reach for. The nine that
+// want a real one are compiled out, and their export tables with them — an
+// export table naming absent declarations is an error in the module
 // interface, not in the consumer.
 //
 // ⚠️ The export table is NOT here and must never be written here. libc++ ships
