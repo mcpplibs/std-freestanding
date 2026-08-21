@@ -181,23 +181,39 @@ others must not.
 
 ### Would the MSVC standard library do instead?
 
-Not for this target, and the reason is not that Microsoft has not written a
-freestanding mode. Its headers rest on the Windows C runtime — `<vcruntime.h>`,
-the UCRT, `__declspec` — and none of that exists for `riscv64-none-elf`. The
-missing piece is not a switch; it is the layer underneath.
+Not for this target, and ⭐ **the measured reason is one step earlier than the
+expected one.**
 
-⚠️ **That paragraph is still reasoning rather than measurement, and one of its
-supporting arguments has since been measured and found false.** The tempting
-objection "a bare-metal triple cannot be combined with the MSVC ABI" is wrong:
-clang accepts `riscv64-pc-windows-msvc`. Disproving an objection does not
-establish a conclusion, so the question went back to open rather than closed.
+The expected answer was that MSVC STL's headers rest on the Windows C runtime —
+`<vcruntime.h>`, the UCRT, `__declspec` — and would fail to compile for
+`riscv64-none-elf`. Measured on a Windows runner with the payload's own clang,
+they do not fail to compile:
 
-CI now asks the machine directly: an informational, allowed-to-fail step on the
-Windows row compiles `#include <array>` for `riscv64-none-elf` against the MSVC
-standard library and records the first error, with the same compile for
-`x86_64-pc-windows-msvc` as a control. Nothing here depends on the answer — the
-step exists because one error message from the machine that can produce it is
-worth more than a paragraph written from memory.
+```
+── MSVC STL, for a bare-metal target ──
+t.cpp:1:10: fatal error: 'array' file not found
+── MSVC STL, for its own target, as a control ──
+(no diagnostics)
+```
+
+**The headers are never reached.** clang searches the MSVC standard library only
+when the target is an MSVC target; for `riscv64-none-elf` it does not look
+there at all, so `<array>` is simply absent. The control shows the same clang
+compiling the same line for `x86_64-pc-windows-msvc` without complaint.
+
+⇒ "Use MSVC STL for a bare-metal target" is not a thing that fails; it is a
+thing the driver never attempts. Which standard library the HOST's clang was
+built against does not participate in a cross compilation.
+
+⚠️ **This paragraph was reasoning until CI measured it, and the measurement
+changed what it says.** Two earlier attempts at the reason were both wrong: that
+a bare triple cannot be combined with the MSVC ABI (clang accepts
+`riscv64-pc-windows-msvc`), and that MSVC STL's headers would fail on the
+Windows C runtime (they are never reached). The step that produced the block
+above is informational and allowed to fail; nothing in this package depends on
+its answer. It exists because one error message from the machine that can
+produce it is worth more than a paragraph written from memory — and it has now
+corrected such a paragraph twice.
 
 ### And libstdc++?
 
