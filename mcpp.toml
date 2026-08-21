@@ -1,17 +1,33 @@
-# ⚠️ No [xlings] section, and that is the point.
+# ⚠️ THIS PACKAGE ASKS FOR WHAT IT NEEDS RATHER THAN DECLARING IT, AND THE ONE
+# DECLARATION AT THE BOTTOM IS AN EXCEPTION THAT HAS TO EARN ITSELF.
 #
-# This package needs two things it does not own: the C++ library's headers
-# (which ship with whatever toolchain mcpp resolved) and the target's C library
-# (which mcpp resolves from the target's own row, exactly as it resolves the
-# compiler). It ASKS for both — `mcpp::toolchain_dir()` and
-# `mcpp::sysroot_dir()` — instead of declaring them.
+# It needs two things it does not own: the C++ library's headers (which ship
+# with whatever toolchain mcpp resolved) and the target's C library (which mcpp
+# resolves from the target's own row, exactly as it resolves the compiler). It
+# ASKS for both — `mcpp::toolchain_dir()` and `mcpp::sysroot_dir()` — instead of
+# declaring them. Declaring them is what bound an earlier version of this
+# package to picolibc, to RISC-V and to llvm, none of which it has any business
+# knowing about.
 #
-# Declaring them is what bound an earlier version of this package to picolibc,
-# to RISC-V and to llvm, none of which it has any business knowing about.
+# ⭐ THE `[xlings] deps` AT THE BOTTOM DOES NOT NAME AN IMPLEMENTATION; IT NAMES
+# A SECOND PLACE TO FIND THE SAME ONE.
+#
+# That is the distinction, and it is the whole justification. Declaring
+# `picolibc` chose one C library out of several that could have served. Naming
+# `libcxx-headers` chooses nothing: this package already reads libc++'s headers
+# and libc++'s own `std/<h>.inc` export tables, and synthesises libc++'s
+# `__config_site`. The declaration says only where those same files come from on
+# a host whose LLVM payload did not package them.
+#
+# ⚠️ It is still a weakening of the rule above, and saying so is the price of
+# making it. The rule would be kept intact by an mcpp API for "give me libc++'s
+# headers"; there is none, and inventing one would put a standard library's name
+# into the build system. Of the two, a package name in this manifest is the
+# smaller thing to be wrong about.
 [package]
 namespace   = "mcpplibs"
 name        = "std-freestanding"
-version     = "0.4.0"
+version     = "0.5.0"
 description = "The freestanding subset of the C++ standard library as a module — import mcpplibs.std.freestanding"
 license     = "Apache-2.0"
 authors     = ["mcpplibs"]
@@ -93,3 +109,23 @@ std-freestanding-alloc-libc = "^0.1.0"
 
 [feature-deps.nolibc]
 std-freestanding-nolibc = "^0.2.0"
+
+# ── The second place the headers can come from ──────────────────────────────
+#
+# ⚠️ DECLARED SO THAT `build.mcpp` CAN ASK WHERE IT LANDED, NOT SO THAT IT GETS
+# INSTALLED. `mcpp::xpkg_dir` answers only for a package the OWNING manifest
+# declares, and a `[xlings] deps` entry is a declaration rather than an install
+# trigger — a distinction this ecosystem has been bitten by once already, in a
+# template whose generated project built on three machines and ran on none.
+#
+# Installation comes from the other channel: this package's INDEX descriptor
+# names `xim:libcxx-headers` under the platform whose LLVM payload ships no
+# libc++, and an index descriptor's platform `deps` ARE installed with the
+# package.
+#
+# ⭐ Declaring it unconditionally costs nothing where it is not needed.
+# `build.mcpp` consults the toolchain payload first and reaches this package
+# only when the payload carries no `include/c++/v1`; on Linux and macOS the
+# fallback is never taken and the compile line is byte-for-byte what it was.
+[xlings]
+deps = ["libcxx-headers"]
