@@ -27,7 +27,7 @@
 [package]
 namespace   = "mcpplibs"
 name        = "std-freestanding"
-version     = "0.5.0"
+version     = "0.5.1"
 description = "The freestanding subset of the C++ standard library as a module — import mcpplibs.std.freestanding"
 license     = "Apache-2.0"
 
