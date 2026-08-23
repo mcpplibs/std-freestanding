@@ -30,6 +30,13 @@ name        = "std-freestanding"
 version     = "0.5.0"
 description = "The freestanding subset of the C++ standard library as a module — import mcpplibs.std.freestanding"
 license     = "Apache-2.0"
+
+# The C++ layer, supplied as a subset rather than as a whole standard library.
+#
+# The distinction needs no capability of its own: this package declares no
+# `[package] std-module`, and that absence is what tells the engine `import
+# std` is not available here while `import mcpplibs.std.freestanding` is.
+provides    = ["mcpp:c++-abi=freestanding"]
 authors     = ["mcpplibs"]
 repo        = "https://github.com/mcpplibs/std-freestanding"
 
