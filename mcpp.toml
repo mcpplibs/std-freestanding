@@ -27,7 +27,7 @@
 [package]
 namespace   = "mcpplibs"
 name        = "std-freestanding"
-version     = "0.5.1"
+version     = "0.5.2"
 description = "The freestanding subset of the C++ standard library as a module — import mcpplibs.std.freestanding"
 license     = "Apache-2.0"
 
@@ -134,5 +134,28 @@ std-freestanding-nolibc = "^0.2.0"
 # `build.mcpp` consults the toolchain payload first and reaches this package
 # only when the payload carries no `include/c++/v1`; on Linux and macOS the
 # fallback is never taken and the compile line is byte-for-byte what it was.
+#
+# ⚠️ BOTH SPELLINGS, AND THE PAIR IS THE MIGRATION.
+#
+# `[xlings.workspace]` is the one table since mcpp 2026.9.3.1; `deps` is the
+# older spelling of the same statement. An engine that knows the table
+# collapses the two, because they agree; one that predates it reads `deps` and
+# behaves as today. Dropping the older line now would be a silent regression
+# there — such an engine parses the table and provisions nothing from it, so
+# `build.mcpp` would find no headers through `mcpp::xpkg_dir` on the one
+# platform that needs the fallback. The line goes once no supported engine
+# needs it.
+#
+# The version is unconstrained on both sides: this package needs the headers to
+# exist and has nothing to say about which release of them.
+#
+# The name stays bare. A namespaced package is written
+# `"<namespace>:<name>" = "<version>"` since mcpp 2026.9.3.2, and this entry has
+# no namespace to write: the `deps` line it mirrors names `libcxx-headers`
+# unqualified, and qualifying it here would change which index the name
+# resolves through.
 [xlings]
 deps = ["libcxx-headers"]
+
+[xlings.workspace]
+libcxx-headers = ""

@@ -12,7 +12,7 @@ jobs:
     runs-on: ubuntu-24.04
     timeout-minutes: 40
     env:
-      MCPP_VERSION: 2026.8.20.2
+      MCPP_VERSION: 2026.9.3.2
       XLINGS_VERSION: v2026.8.17.2
       XLINGS_NON_INTERACTIVE: '1'
     steps:
@@ -341,7 +341,7 @@ jobs:
       run:
         shell: bash
     env:
-      MCPP_VERSION: 2026.8.20.2
+      MCPP_VERSION: 2026.9.3.2
       XLINGS_VERSION: v2026.8.17.2
       XLINGS_NON_INTERACTIVE: '1'
     steps:
@@ -553,7 +553,7 @@ jobs:
           - { label: 'alloc-kal',  spec: ', features = ["alloc-kal"]',  expect: 'links and runs' }
           - { label: 'nolibc',     spec: ', features = ["nolibc"]',     expect: 'compiles with no C library' }
     env:
-      MCPP_VERSION: 2026.8.20.2
+      MCPP_VERSION: 2026.9.3.2
       XLINGS_VERSION: v2026.8.17.2
       XLINGS_NON_INTERACTIVE: '1'
     steps:
