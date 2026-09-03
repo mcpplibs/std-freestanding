@@ -148,6 +148,12 @@ std-freestanding-nolibc = "^0.2.0"
 #
 # The version is unconstrained on both sides: this package needs the headers to
 # exist and has nothing to say about which release of them.
+#
+# The name stays bare. A namespaced package is written
+# `"<namespace>:<name>" = "<version>"` since mcpp 2026.9.3.2, and this entry has
+# no namespace to write: the `deps` line it mirrors names `libcxx-headers`
+# unqualified, and qualifying it here would change which index the name
+# resolves through.
 [xlings]
 deps = ["libcxx-headers"]
 
